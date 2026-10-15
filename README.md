@@ -1,32 +1,73 @@
-# yama-python
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset=".github/assets/yama-logo-dark.svg">
+    <img src=".github/assets/yama-logo-light.svg" alt="Yama" width="280">
+  </picture>
+</p>
 
-The official Python client for the [Yama](https://getyama.ca) API.
+<p align="center">
+  <em>The official Python client for the Yama access-control API.</em>
+</p>
 
-Yama manages access control for condos and apartment buildings: intercom call routing, access codes and call logs. This library lets your integration manage a building's access codes and read its call log, with no hand-written HTTP, authentication, pagination or error handling.
+<p align="center">
+  <a href="https://pypi.org/project/yama/"><img src="https://img.shields.io/pypi/v/yama?style=flat-square" alt="PyPI"></a>
+  <a href="https://pypi.org/project/yama/"><img src="https://img.shields.io/pypi/pyversions/yama?style=flat-square" alt="Python versions"></a>
+  <a href="https://github.com/YASS-Ltd/yama-python/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/YASS-Ltd/yama-python/ci.yml?branch=main&style=flat-square&label=CI" alt="CI"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/licence-MIT-21212B?style=flat-square" alt="MIT licence"></a>
+</p>
 
-> **Status: in development.** Nothing is published on PyPI yet. Until then, use the REST API directly: see the [API docs](https://app.getyama.ca/api/v2/docs/).
+---
 
-## What it will cover
+**API docs:** <https://app.getyama.ca/api/v2/docs/> · **Source:** <https://github.com/YASS-Ltd/yama-python>
 
-| Resource | Operations |
-|---|---|
-| Access codes | List, create, read, update, delete, including expiry |
-| Call log | Read calls by date range, across your units or for one unit or building |
-| Buildings, units, contacts | Read only |
-| Your API key | Read its own permissions and unit access |
+---
 
-## Authentication
+Manage a building's access codes and read its call log from Python. The client handles auth, pagination, retries and errors, and gives you typed objects back.
 
-The client authenticates with a Yama API key. The Account Holder creates keys in the Yama portal under **Settings › API keys**. Keep a key in a secret manager or an environment variable, never in source control.
+> [!NOTE]
+> **In development.** Nothing is on PyPI yet. Until then, use the [REST API](https://app.getyama.ca/api/v2/docs/) directly.
+
+## Install
+
+```console
+uv add yama        # or: pip install yama
+```
+
+## Quick start
+
+```python
+from datetime import date
+
+from yama import Yama
+
+client = Yama()  # reads YAMA_API_KEY
+
+for code in client.codes.list():
+    print(code.name, code.expires_at)
+
+for call in client.calls.list(start=date(2026, 10, 1), end=date(2026, 10, 31)):
+    print(call.started_at, call.result)
+```
+
+Create a key in the Yama portal under **Settings › API keys**. Keep it in an environment variable or a secret manager, never in source control.
+
+## What you get
+
+- **Typed:** Pydantic models with UTC-aware datetimes, so your editor autocompletes.
+- **Every page:** iterating a list follows `next` to the end, and the call log is de-duplicated.
+- **Safe retries:** only on 5xx, 429 (honouring `Retry-After`) and network errors.
+- **Clear errors:** `NotFoundError`, `ValidationError` with field messages, `RateLimitError` and more.
+- **Forward-compatible:** new fields and enum values from the API don't break your code.
+- **Small:** two dependencies, httpx and Pydantic. Python 3.10 and newer.
 
 ## Versioning
 
-The client follows [Semantic Versioning](https://semver.org/) and targets version 2 of the Yama API (`/api/v2/`). Each release states which API version it supports.
+SemVer, targeting version 2 of the Yama API (`/api/v2/`). See the [changelog](CHANGELOG.md).
 
 ## Contributing
 
-Found a bug or want a feature? [Open an issue](https://github.com/YASS-Ltd/yama-python/issues). Development uses [uv](https://docs.astral.sh/uv/).
+Bug reports and ideas are welcome in [issues](https://github.com/YASS-Ltd/yama-python/issues). Development uses [uv](https://docs.astral.sh/uv/) and [just](https://just.systems/): `just check` runs everything CI does. Report security issues privately; see [SECURITY.md](SECURITY.md).
 
 ## Licence
 
-[MIT](LICENSE), © Yama Access Software Systems Ltd.
+[MIT](LICENSE) © Yama Access Software Systems Ltd.
