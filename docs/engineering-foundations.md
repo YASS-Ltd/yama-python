@@ -4,6 +4,10 @@ The tech stack, design principles, testing, CI and release process for yama-pyth
 
 Items marked **Proposed** are working defaults, not yet confirmed. Confirm or change each one when the work reaches it, and update this doc.
 
+## Guiding Star: Lightweight
+
+Lightweight code and lightweight process. Few dependencies, little code, and as few files, steps, tools and rules as the job needs. When two approaches both work, pick the one with less to read, run and maintain. Every addition to this doc, the `justfile`, CI or the issue process has to earn its place, and removing something that no longer does is a welcome change.
+
 ## Tech Stack
 
 | Layer | Choice |

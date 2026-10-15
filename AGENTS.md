@@ -6,6 +6,8 @@ Yama is a cloud-based SaaS platform for managing access control (intercom/dialer
 
 **Status:** pre-release. No client code yet. Scope and design are in `docs/prd-v0.1.md` and `docs/engineering-foundations.md`.
 
+**Guiding star: lightweight.** Lightweight code and lightweight process. Prefer less code, fewer dependencies, fewer steps and fewer rules (see `docs/engineering-foundations.md`).
+
 ## Product Terminology
 
 - **Account Holder**: the customer entity (building owner, condominium corporation, or property manager) that contracts with Yama and creates API keys.
