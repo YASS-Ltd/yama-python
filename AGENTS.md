@@ -61,9 +61,9 @@ API conventions the client must handle:
 Work is tracked in GitHub Issues on `YASS-Ltd/yama-python` and planned on a GitHub Project board. Issues are public, so write them for outside readers. Use the `gh` CLI:
 
 - Find work: `gh issue list`, `gh issue view <n> --comments`.
-- New work: `gh issue create` using the templates in `.github/ISSUE_TEMPLATE/`. A task issue has **Why**, **Acceptance criteria** (a checkbox list) and, once planned, **Implementation plan** sections.
-- Planning: write the plan into the issue body (`gh issue edit <n> --body-file ...`) and add a `model:haiku-ok`, `model:sonnet-recommended` or `model:opus-recommended` label saying which model tier should implement it, with a sentence on why.
-- Progress: tick acceptance criteria in the issue as they're met, and put `Closes #<n>` in the PR so merging closes the issue.
+- New work: `gh issue create` using the templates in `.github/ISSUE_TEMPLATE/`. A task issue has just **Why** and **Done when** (a checkbox list). Keep it short; the plan and the detail belong in the PR, not the issue.
+- Optionally label an issue `model:haiku-ok`, `model:sonnet-recommended` or `model:opus-recommended` to say which model tier should implement it.
+- Progress: put `Closes #<n>` in the PR so merging closes the issue.
 - Triage: label new outside issues (`bug`, `enhancement`, `question`) and add them to the Project, or reply and close them.
 - Leave out AI-tool attribution in issue bodies and comments.
 

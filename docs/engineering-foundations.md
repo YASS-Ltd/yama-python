@@ -51,16 +51,13 @@ The `justfile` is the single entry point for repeated commands: `just test`, `ju
 - **Contract tests** check the client against the vendored schema: every operation in the schema has a client method, and every request the client builds validates against the schema.
 - **No production calls** in tests or CI. An optional live-test suite runs against a non-production Yama instance with a dedicated key, outside CI, and is skipped when the environment variables are absent.
 - **Fixtures** use made-up data shaped like the integrator guide's examples. Never commit real API responses: they hold customer phone numbers and names.
-- **Coverage** is reported in CI. **Proposed:** a 90% floor on the `yama` package, enforced once v0.1's core is in.
+- **Coverage** is there to find untested code (`just cov`), not a gate. There is no floor.
 
 ## CI and Branch Policy
 
-GitHub Actions on every pull request and every push to `main`:
+On every pull request and every push to `main`, GitHub Actions runs `just check` (ruff, mypy, pytest, and a build whose wheel is imported in a clean environment) on every supported Python version, on Linux only. The package and its dependencies are pure Python, so other operating systems add minutes but catch little.
 
-1. ruff (lint and format check) and mypy.
-2. pytest across the supported Python versions on Linux, plus the newest version on macOS and Windows.
-3. A schema drift check: fetch the published schema and compare it with the vendored copy. A drift fails a scheduled daily run and opens an issue; on PRs it only warns, so an API release doesn't block unrelated work.
-4. A build check: build the sdist and wheel, then install the wheel into a clean environment and import it.
+A separate daily job runs `just schema-diff` and fails when the published schema no longer matches the vendored copy. It doesn't run on PRs, so an API release never blocks unrelated work.
 
 Branches: feature branches off `main`, squash-merged through PRs with `Closes #<n>`. `main` is always releasable.
 
@@ -77,5 +74,5 @@ Branches: feature branches off `main`, squash-merged through PRs with `Closes #<
 ## Security
 
 - The repo is public: no keys, customer data, internal hostnames or django-poc internals in code, tests, issues or docs.
-- Dependabot keeps dependencies and the GitHub Actions in use up to date, and `SECURITY.md` explains how to report a vulnerability privately.
+- Dependabot keeps dependencies and GitHub Actions up to date with one grouped PR each a month, and `SECURITY.md` explains how to report a vulnerability privately.
 - Release artifacts get PyPI's attestations through trusted publishing.

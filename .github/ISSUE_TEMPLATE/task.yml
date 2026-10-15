@@ -10,16 +10,9 @@ body:
     validations:
       required: true
   - type: textarea
-    id: acceptance
+    id: done
     attributes:
-      label: Acceptance criteria
-      description: Observable outcomes that mean this is done, as a checkbox list.
+      label: Done when
+      description: What will be true when this is finished.
       value: |
         - [ ] 
-    validations:
-      required: true
-  - type: textarea
-    id: plan
-    attributes:
-      label: Implementation plan
-      description: Filled in when the work is planned. Leave blank when opening the issue.

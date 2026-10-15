@@ -2,27 +2,17 @@ name: Bug report
 description: Something in the client doesn't work as documented
 labels: ["bug"]
 body:
-  - type: markdown
-    attributes:
-      value: |
-        Never paste an API key or customer data into an issue. Redact keys, phone numbers and names from any output.
   - type: textarea
     id: what-happened
     attributes:
       label: What happened
-      description: What you did, what you expected, and what happened instead. Include the error message and traceback.
+      description: |
+        What you did, what you expected, and what happened instead. Short code and the error message help most.
+        **Never paste an API key or customer data.** Redact keys, phone numbers and names.
     validations:
       required: true
-  - type: textarea
-    id: reproduce
-    attributes:
-      label: Minimal reproduction
-      description: The smallest code that shows the problem.
-      render: python
   - type: input
     id: versions
     attributes:
       label: Versions
-      description: Client version and Python version, e.g. "yama 0.1.0, Python 3.13"
-    validations:
-      required: true
+      placeholder: yama 0.1.0, Python 3.13
