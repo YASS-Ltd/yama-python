@@ -1,0 +1,25 @@
+name: Feature or task
+description: New functionality or a planned piece of work
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: why
+    attributes:
+      label: Why
+      description: The problem this solves and who it's for.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Observable outcomes that mean this is done, as a checkbox list.
+      value: |
+        - [ ] 
+    validations:
+      required: true
+  - type: textarea
+    id: plan
+    attributes:
+      label: Implementation plan
+      description: Filled in when the work is planned. Leave blank when opening the issue.
