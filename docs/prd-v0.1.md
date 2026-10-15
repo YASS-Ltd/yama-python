@@ -33,14 +33,15 @@ A small, typed, official Python client removes that work and makes the documente
 Each item becomes a GitHub issue.
 
 1. **Settle the open questions** below (done, see Settled Choices).
-2. **Project skeleton:** packaging, tooling, CI test matrix, the vendored OpenAPI schema and a drift check against the published one.
+2. **Project skeleton:** packaging, tooling and a `justfile`, CI test matrix, the vendored OpenAPI schema and a drift check against the published one.
 3. **Core transport:** client construction (key, base URL, timeout), Bearer auth, the `User-Agent`, error mapping to exception classes, and retries on 5xx/429/network errors with `Retry-After` and backoff.
 4. **Pagination:** a lazy iterator that follows `next`, plus access to a single page and its `count` for callers who want it.
 5. **Read resources:** API key, buildings, units, contacts, with their filters.
 6. **Access codes:** list, get, create (with `expires_at`), update (PUT and PATCH, including clearing `expires_at`), delete.
 7. **Call log:** list by date range with `unit`/`building`/`result` filters, get by uuid, and de-duplication by `uuid` while paging.
 8. **Docs and examples:** README quick start, a reference generated from docstrings, and runnable examples matching the integrator guide's.
-9. **Release 0.1.0** to PyPI through trusted publishing, and announce it in the integrator guide.
+9. **Release tooling:** `just release` (with `--dry-run` and automatic version calculation), changelog collection, and the publish workflow.
+10. **Release 0.1.0** to PyPI through trusted publishing, and announce it in the integrator guide.
 
 ## Current-State Audit
 

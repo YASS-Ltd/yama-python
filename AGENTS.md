@@ -44,6 +44,7 @@ API conventions the client must handle:
 ## Development Workflow
 
 - Use [uv](https://docs.astral.sh/uv/) for every Python command, as in django-poc.
+- Use the [just](https://just.systems/man/en/) recipes when one exists (`just --list`); `just check` runs what CI runs. Releases go through `just release` (try `just release --dry-run` first) and publish from CI, never from a local machine. The process is in `docs/engineering-foundations.md`.
 - **Tests first**: write a failing test, implement the minimum change, refactor while green.
 - Tests must not call the production API. Use recorded or mocked HTTP responses, plus contract checks against the schema.
 - Never commit API keys, even expired ones, or real responses containing customer data.
@@ -51,7 +52,7 @@ API conventions the client must handle:
 ## Git
 
 - `main` is the default branch. Work happens on `feature/...` branches and is squash-merged through PRs.
-- Every user-facing PR includes a `## Changelog` section with 1-3 bullets tagged `[Added]`/`[Changed]`/`[Fixed]`/`[Security]`/`[Removed]`. Leave out AI-tool attribution in Changelog bullets.
+- Every user-facing PR includes a `## Changelog` section with 1-3 bullets tagged `[Added]`/`[Changed]`/`[Fixed]`/`[Security]`/`[Removed]` (untagged counts as `[Changed]`). Start a `[Changed]` bullet with `Breaking:` when it breaks existing callers, because the bullets set the next version number. Leave the section out of housekeeping PRs (CI, refactors, docs). Leave out AI-tool attribution in Changelog bullets.
 
 ## Issues and Projects
 
