@@ -13,7 +13,7 @@ for code in client.codes.list():
     print(code.code, code.name)
 ```
 
-The fake behaves like the API: lists page with `next` links and take the same filters, codes can be created, replaced, updated and deleted, bad input gets the same 400s, and a missing object gets a 404. Creates honour idempotency keys, including the 422 for a key reused with different data and the 410 for a code deleted since. Each call to `fake_transport()` starts from its own fresh copy of the data, so tests don't affect each other.
+The fake behaves like the API: lists take the same filters, codes can be created, replaced, updated and deleted, bad input gets the same 400s, and a missing object gets a 404. Creates honour idempotency keys, including the 422 for a key reused with different data and the 410 for a code deleted since. Each call to `fake_transport()` starts from its own fresh copy of the data, so tests don't affect each other.
 
 Any API key works, except `rate-limited`, which gets a 429 with a `Retry-After` of 120 seconds on every request, so you can test your handling of `RateLimitError` without waiting.
 

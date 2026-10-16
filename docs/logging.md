@@ -1,6 +1,6 @@
 # Logging
 
-The client logs through the standard `logging` module, to the `yama` logger only. It adds a `NullHandler` and nothing else: no handlers, levels or formats, so your logging setup, structlog, OpenTelemetry or Sentry decides where its records go.
+The client logs through the standard `logging` module, to the `yama` logger only. It sets no handlers, levels or formats, so your logging setup, structlog, OpenTelemetry or Sentry decides where its records go.
 
 | Level | Record |
 |---|---|

@@ -2,7 +2,7 @@
 
 ## Lists
 
-Every `list()` method returns an iterator of items. It requests nothing until you start iterating, then fetches pages of up to 500 as it goes and follows the API's `next` links to the end. Stop iterating, and it stops requesting.
+Every `list()` method returns an iterator of items. It requests nothing until you start iterating, then fetches more as it goes. Stop iterating, and it stops requesting.
 
 ```python
 from yama import Yama
@@ -53,7 +53,7 @@ rejected = list(client.calls.list(start=day, result=CallResult.REJECTED))
 
 - A `date`, or a datetime without a time zone, raises before any request is sent.
 - Leave out `start` or `end` to leave that side open; with neither, you get all history.
-- Paging stops at the first call before `start`, so polling for recent calls is cheap.
-- New calls arriving while you page push older ones onto the next page. The client skips a call it has already yielded, so each call comes once.
+- With a `start`, polling for recent calls is cheap.
+- Each call comes once, even when new calls arrive while you iterate.
 
 To keep your own copy of the call log up to date, follow the [call-log sync recipe](production.md#syncing-the-call-log).

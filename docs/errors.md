@@ -44,14 +44,14 @@ except NotFoundError as error:
 The client retries a request, up to `max_retries` times (2 by default), only where repeating it can't do harm:
 
 - **A 429, or a failure to connect**, for every call: the API never ran the request.
-- **A 5xx, a timeout or a broken connection**, for every call except a create sent without an idempotency key. The client always sends one, so in practice every call.
+- **A 5xx, a timeout or a broken connection**, for every call, creates included (see [Creates that are safe to repeat](#creates-that-are-safe-to-repeat)).
 - **Never** a 4xx other than 429, which would fail again. A 409 on a create is retried, since it means the first attempt is still running.
 
-It waits as long as `Retry-After` says, or else an increasing, jittered delay of up to 8 seconds. When `Retry-After` asks for more than 60 seconds, it raises `RateLimitError` at once instead of blocking, and you choose when to try again. A retried delete that gets a 404 counts as done, since an earlier attempt may have deleted it. Each retry is logged at INFO (see [Logging](logging.md)).
+It waits as long as `Retry-After` says, or else an increasing delay. When `Retry-After` asks for more than 60 seconds, it raises `RateLimitError` at once instead of blocking, and you choose when to try again. A retried delete that gets a 404 counts as done, since an earlier attempt may have deleted it. Each retry is logged at INFO (see [Logging](logging.md)).
 
 ## Creates that are safe to repeat
 
-`codes.create()` sends an `Idempotency-Key` header, so the API runs the create at most once however many times it's sent with that key. The client makes a new random key for each call and reuses it for its own retries. When a create still fails, the error's `idempotency_key` is the key that was sent. If you don't know whether the create happened, after an `APIConnectionError`, a `ConflictError` or a `ServerError`, send it again with that key and the same data:
+`codes.create()` sends an `Idempotency-Key`, so the API runs the create at most once however many times it's sent with that key. Each call uses a new key, kept across its retries, unless you pass `idempotency_key`. When a create still fails, the error's `idempotency_key` is the key that was sent. If you don't know whether the create happened, after an `APIConnectionError`, a `ConflictError` or a `ServerError`, send it again with that key and the same data:
 
 ```python
 from yama import APIConnectionError, ConflictError, ServerError

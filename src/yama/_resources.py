@@ -87,7 +87,7 @@ class Buildings(_Resource):
     """Your buildings (read-only)."""
 
     def list(self) -> Iterator[Building]:
-        """Every building, fetched page by page as you iterate."""
+        """Every building, fetched as you iterate."""
         return self._client._list("buildings/", Building)
 
     def get(self, uuid: UUID | str) -> Building:
@@ -159,8 +159,8 @@ class Codes(_Resource):
         """Create an access code.
 
         The create is sent with an `Idempotency-Key`, so the client retries it after a timeout,
-        a 5xx or a 409 without creating the code twice. Each call gets a new random key unless
-        you pass `idempotency_key`: 1 to 255 printable ASCII characters, without spaces.
+        a 5xx or a 409 without creating the code twice. Each call gets a new key unless you
+        pass `idempotency_key`: 1 to 255 printable ASCII characters, without spaces.
 
         Pass your own stable key when your code may repeat the create, such as a job that
         re-runs, and always send it with the same data: work out time fields such as
@@ -243,9 +243,8 @@ class Calls(_Resource):
 
         `start` and `end` are timezone-aware datetimes, so one local day is from its midnight
         to the next, in any time zone. Leaving one out leaves that side of the range open, so
-        with neither you get all history. Paging stops at the first call before `start`, so
-        polling for recent calls is cheap. A call that shifts onto the next page as new calls
-        arrive is yielded once.
+        with neither you get all history. With a `start`, polling for recent calls is cheap.
+        Each call is yielded once, even when new calls arrive while you iterate.
 
         Raises:
             TypeError: `start` or `end` is a `date`, or anything else but a `datetime`.

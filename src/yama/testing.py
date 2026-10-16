@@ -7,7 +7,7 @@
     client = Yama(api_key="test", http_client=httpx.Client(transport=fake_transport()))
 
 The fake holds a few made-up buildings, units, contacts, access codes and calls, and behaves
-like the real API: lists page with `limit`, `offset` and `next`, and take the same filters;
+like the real API: lists take the same filters;
 access codes can be created, replaced, updated and deleted; bad input, such as an expiry in
 the past (other than a code's current one, sent back), gets the same 400s, and
 a missing object a 404. A create repeating an `Idempotency-Key` replays the first answer, or
