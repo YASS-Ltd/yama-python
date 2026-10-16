@@ -90,7 +90,7 @@ Every `list()` returns a plain `Iterator[T]` (a generator) that yields items, ne
 def fake_transport() -> httpx.MockTransport
 ```
 
-Use: `Yama(api_key="test", http_client=httpx.Client(transport=fake_transport()))` (TEST-1). It implements the behaviours listed in the foundations doc's testing strategy. The repo's own tests check its responses against the vendored schema.
+Use: `Yama(api_key="test", http_client=httpx.Client(transport=fake_transport()))` (TEST-1). It implements the behaviours listed in the foundations doc's testing strategy. Any key works except `rate-limited`, which gets a 429 with a `Retry-After` of 120 seconds on every request, so a caller sees `RateLimitError` without waiting. The repo's own tests check its responses against the vendored schema.
 
 ## Models (`yama.models`)
 
@@ -115,7 +115,7 @@ YamaError                       # base; also raised for misconfiguration (CFG-2)
     └── ServerError             # 5xx
 ```
 
-An error's message is `"<status> <detail>"`. Errors hold plain fields only, never the `httpx.Response` (ERR-5). The `codes.create` docstring says to pass a stable `idempotency_key` when the caller's own code may repeat a create, such as a job that re-runs.
+An error's message is `"<status> <detail>"`, where `detail` is the body's `detail`, or else its field errors joined (`"code: Access code already exists for this unit."`), or else the HTTP reason phrase. Errors hold plain fields only, never the `httpx.Response` (ERR-5). The `codes.create` docstring says to pass a stable `idempotency_key` when the caller's own code may repeat a create, such as a job that re-runs.
 
 ## Implementation Defaults
 
