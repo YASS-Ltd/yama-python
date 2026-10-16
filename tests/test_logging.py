@@ -58,6 +58,10 @@ def test_log_2_logs_one_info_record_per_retry(log: pytest.LogCaptureFixture) -> 
         assert fact in message
 
 
+# Long enough that it can't turn up by chance in a record's times or IDs.
+CODE = "739154286015"
+
+
 def test_log_3_keeps_secrets_and_payloads_out_and_logs_nothing_above_info(
     log: pytest.LogCaptureFixture,
 ) -> None:
@@ -65,7 +69,7 @@ def test_log_3_keeps_secrets_and_payloads_out_and_logs_nothing_above_info(
         KEY,
         "Bearer",
         "Authorization",
-        "4321",
+        CODE,
         "Cleaner",
         "?",
         "code=",
@@ -73,17 +77,17 @@ def test_log_3_keeps_secrets_and_payloads_out_and_logs_nothing_above_info(
     ]
     handler, _ = recorder(
         httpx.ReadTimeout("slow"),
-        respond(503, {"detail": "Down: 4321 Cleaner"}),
-        respond(400, {"code": ["4321 already exists."]}),
+        respond(503, {"detail": f"Down: {CODE} Cleaner"}),
+        respond(400, {"code": [f"{CODE} already exists."]}),
     )
     client, _ = make_client(handler)
     with pytest.raises(YamaError):
         client._request(
             "POST",
             "codes/",
-            params={"code": "4321"},
-            json={"code": "4321", "name": "Cleaner"},
-            headers={"Idempotency-Key": "4321"},
+            params={"code": CODE},
+            json={"code": CODE, "name": "Cleaner"},
+            headers={"Idempotency-Key": CODE},
         )
     assert len(log.records) == 5  # three attempts, two retries
     assert all(r.levelno < logging.WARNING for r in log.records)
