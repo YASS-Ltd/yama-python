@@ -21,7 +21,8 @@ class APITimeoutError(APIConnectionError):
 
 
 class APIStatusError(YamaError):
-    """The base class for HTTP errors; raised itself for a status without its own class."""
+    """The base class for HTTP errors; raised itself for a status without its own class.
+    Quote its `request_id` to Yama support when asking about a failed call."""
 
     def __init__(
         self,
@@ -31,8 +32,9 @@ class APIStatusError(YamaError):
         api_version: str | None,
         method: str,
         path: str,
+        request_id: str | None = None,
     ) -> None:
-        super().__init__(status_code, detail, body, api_version, method, path)
+        super().__init__(status_code, detail, body, api_version, method, path, request_id)
         self.status_code = status_code
         """The HTTP status code."""
         self.detail = detail
@@ -45,9 +47,15 @@ class APIStatusError(YamaError):
         """The request's HTTP method."""
         self.path = path
         """The request's URL path, without its query string."""
+        self.request_id = request_id
+        """The response's `Request-Id` header, which Yama support asks for to find the request;
+        None when it has none."""
 
     def __str__(self) -> str:
-        return f"{self.status_code} {self.detail} ({self.method} {self.path})"
+        where = f"{self.method} {self.path}"
+        if self.request_id:
+            where += f", Request-Id {self.request_id}"
+        return f"{self.status_code} {self.detail} ({where})"
 
 
 class BadRequestError(APIStatusError):
@@ -101,9 +109,10 @@ class RateLimitError(APIStatusError):
         api_version: str | None,
         method: str,
         path: str,
+        request_id: str | None = None,
         retry_after: int | None = None,
     ) -> None:
-        super().__init__(status_code, detail, body, api_version, method, path)
+        super().__init__(status_code, detail, body, api_version, method, path, request_id)
         self.args = (*self.args, retry_after)
         self.retry_after = retry_after
         """Seconds the API asked the client to wait, from `Retry-After`; None when it didn't

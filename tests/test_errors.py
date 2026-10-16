@@ -133,6 +133,34 @@ def test_err_4_raises_type_or_value_error_for_invalid_arguments(
         Yama(**{"api_key": "k", **kwargs})  # type: ignore[arg-type]
 
 
+def test_err_6_carries_the_request_id() -> None:
+    response = respond(404, {"detail": "Not found."}, {"Request-Id": "req_3f9c"})
+    client, _ = make_client(recorder(response)[0])
+    with pytest.raises(NotFoundError) as caught:
+        client._request("GET", "codes/")
+    assert caught.value.request_id == "req_3f9c"
+    assert str(caught.value) == "404 Not found. (GET /api/v2/codes/, Request-Id req_3f9c)"
+
+
+def test_err_6_carries_the_last_responses_request_id_after_retries() -> None:
+    handler, _ = recorder(
+        respond(503, headers={"Request-Id": "req_first"}),
+        respond(503, headers={"Request-Id": "req_last"}),
+    )
+    client, _ = make_client(handler, max_retries=1)
+    with pytest.raises(ServerError) as caught:
+        client._request("GET", "codes/")
+    assert caught.value.request_id == "req_last"
+
+
+def test_err_6_has_no_request_id_when_the_response_has_none() -> None:
+    client, _ = make_client(recorder(respond(404, {"detail": "Not found."}))[0])
+    with pytest.raises(NotFoundError) as caught:
+        client._request("GET", "codes/")
+    assert caught.value.request_id is None
+    assert str(caught.value) == "404 Not found. (GET /api/v2/codes/)"
+
+
 def keyed(error: YamaError) -> YamaError:
     error.idempotency_key = "job-17"
     return error
@@ -151,6 +179,8 @@ def keyed(error: YamaError) -> YamaError:
         ServerError(502, "Bad Gateway", "<html></html>", None, "GET", "/api/v2/x/"),
         keyed(ConflictError(409, "In progress.", {}, "v2", "POST", "/api/v2/codes/")),
         keyed(APITimeoutError("Request timed out: ReadTimeout")),
+        NotFoundError(404, "Not found.", {}, "v2", "GET", "/api/v2/x/", "req_3f9c"),
+        RateLimitError(429, "Slow down.", {}, "v2", "GET", "/api/v2/x/", "req_3f9c", 12),
     ],
 )
 def test_err_5_survives_a_pickle_round_trip(error: YamaError) -> None:

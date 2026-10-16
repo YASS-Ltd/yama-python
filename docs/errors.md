@@ -22,7 +22,7 @@ A failed call raises a [`YamaError`][yama.YamaError] subclass, never an httpx or
 
 "No" means fix the request or your setup first.
 
-An `APIStatusError` carries `status_code`, `detail`, the parsed `body`, `api_version`, `method` and `path`. Its message reads like `404 Not found. (GET /api/v2/codes/<uuid>/)`. Every error pickles with its fields intact.
+An `APIStatusError` carries `status_code`, `detail`, the parsed `body`, `api_version`, `method`, `path` and `request_id`, the response's `Request-Id` (None when it has none). Quote the `request_id` to Yama support when asking about a failed call. Its message reads like `404 Not found. (GET /api/v2/codes/<uuid>/, Request-Id req_3f9c...)`. Every error pickles with its fields intact.
 
 ```python
 from yama import AccessCodeCreate, BadRequestError, NotFoundError, Yama

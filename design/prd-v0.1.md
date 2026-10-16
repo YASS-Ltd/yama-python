@@ -59,6 +59,7 @@ Written in [EARS](https://alistairmavin.com/ears/) form: each is one testable se
 - **ERR-3** If a request still fails at the network level after its retries, then the client shall raise `APIConnectionError`, or its subclass `APITimeoutError` when the last attempt timed out.
 - **ERR-4** The client shall raise only `YamaError` subclasses for failed calls, and `TypeError` or `ValueError` for invalid arguments. Using a closed client is a programming error, and raises `ValueError`.
 - **ERR-5** The client's exceptions shall survive a pickle round trip with their fields intact.
+- **ERR-6** An `APIStatusError` shall carry the response's `Request-Id` header as `request_id`, or None when the response has none, and include it in its message. After retries, it's the last response's.
 
 ### Security (SEC)
 
@@ -66,7 +67,7 @@ Written in [EARS](https://alistairmavin.com/ears/) form: each is one testable se
 
 ### Logging (LOG)
 
-- **LOG-1** The client shall log one DEBUG record to the `yama` logger per HTTP attempt, with its method, path, status, elapsed time and attempt number in the message and as `yama_`-prefixed `extra` fields.
+- **LOG-1** The client shall log one DEBUG record to the `yama` logger per HTTP attempt, with its method, path, status, elapsed time and attempt number in the message and as `yama_`-prefixed `extra` fields, and the response's `Request-Id` as an `extra` field only.
 - **LOG-2** When the client retries a request, it shall log one INFO record with the reason, the wait and the attempt number, in the same two forms.
 - **LOG-3** The client shall keep API keys, headers, request and response bodies and query strings out of every log record, and shall log nothing at WARNING or above.
 

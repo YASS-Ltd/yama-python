@@ -43,6 +43,14 @@ def test_log_1_logs_an_attempt_that_failed_at_the_network_level(
     assert "ConnectError" in first.getMessage()
 
 
+def test_log_1_logs_the_request_id(log: pytest.LogCaptureFixture) -> None:
+    handler, _ = recorder(respond(headers={"Request-Id": "req_3f9c"}))
+    client, _ = make_client(handler)
+    client._request("GET", "codes/")
+    record = next(r for r in log.records if r.levelno == logging.DEBUG)
+    assert record.yama_request_id == "req_3f9c"  # type: ignore[attr-defined]
+
+
 def test_log_2_logs_one_info_record_per_retry(log: pytest.LogCaptureFixture) -> None:
     handler, _ = recorder(respond(429, headers={"Retry-After": "3"}), respond())
     client, _ = make_client(handler)

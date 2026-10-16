@@ -176,7 +176,7 @@ _CODE_FIELDS = ("unit", "code", "name", "expires_at")
 def _json(
     status: int, body: object = None, headers: dict[str, str] | None = None
 ) -> httpx.Response:
-    headers = {"API-Version": "v2", **(headers or {})}
+    headers = {"API-Version": "v2", "Request-Id": f"req_{uuid.uuid4().hex}", **(headers or {})}
     if body is None:
         return httpx.Response(status, headers=headers)
     return httpx.Response(status, json=body, headers=headers)

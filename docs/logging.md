@@ -4,7 +4,7 @@ The client logs through the standard `logging` module, to the `yama` logger only
 
 | Level | Record | `extra` fields |
 |---|---|---|
-| DEBUG | One per HTTP attempt: method, path, status, elapsed time and attempt number. | `yama_method`, `yama_path`, `yama_attempt`, `yama_status` (None after a network failure), `yama_outcome` (the status or the error's name), `yama_elapsed` (seconds) |
+| DEBUG | One per HTTP attempt: method, path, status, elapsed time and attempt number. | `yama_method`, `yama_path`, `yama_attempt`, `yama_status` (None after a network failure), `yama_outcome` (the status or the error's name), `yama_elapsed` (seconds), `yama_request_id` (the response's `Request-Id`; None when there's none) |
 | INFO | One per retry: the reason, the wait and the number of the attempt about to start. | `yama_method`, `yama_path`, `yama_attempt` (the attempt about to start), `yama_reason`, `yama_wait` (seconds) |
 
 Nothing is logged at WARNING or above: a failure raises instead. Each fact is in the message and also in the record's `extra` fields, for structured logging. Records never hold the API key, headers, request or response bodies, or query strings, which can hold access-code digits and phone numbers.
