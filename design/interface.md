@@ -62,7 +62,7 @@ Paths are relative to `/api/v2/`. `uuid` parameters accept `UUID | str`. Filters
 
 | Call | HTTP | Returns |
 |---|---|---|
-| `api_key.get()` | `GET api-key/` | `ApiKey` |
+| `api_key.get()` | `GET api-key/` | `ApiKeyDetails` |
 | `buildings.list()` | `GET buildings/` | `Paginator[Building]` |
 | `buildings.get(uuid)` | `GET buildings/{uuid}/` | `Building` |
 | `units.list(*, building, door_digit, search)` | `GET units/` | `Paginator[Unit]` |
@@ -99,10 +99,10 @@ Use: `Yama(api_key="test", http_client=httpx.Client(transport=fake_transport()))
 
 ## Models (`yama.models`)
 
-- **Responses**, mirroring the schema's components field for field: `ApiKey` (with `ApiKeyPermissions`, `ApiKeyUnitAccess`), `Building`, `Unit`, `Contact`, `AccessCode`, `CallLogEntry`, `CallLogStep`. Frozen, with `extra="allow"` (MOD-2).
+- **Responses**, mirroring the schema's components field for field: `ApiKeyDetails` (the schema's `ApiKey`; it describes the key and never holds the key itself), with `ApiKeyPermissions` and `ApiKeyUnitAccess`, `Building`, `Unit`, `Contact`, `AccessCode`, `CallLogEntry`, `CallLogStep`. Frozen, with `extra="allow"` (MOD-2).
 - **Requests:** `AccessCodeCreate` (`unit: UUID`, `code: str`, `name: str | None = None`, `expires_at: AwareDatetime | None = None`) and `AccessCodeUpdate` (the same fields, all optional). `extra="forbid"` (MOD-4).
 - **Enums**, as `str` enums: `CallResult`, `CallStepKind`, `CodeAttemptResult`, `DialStatus`, `DoorDigit`, `AccessLevel` (`none`/`read`/`write`) and `UnitAccessType`. Response fields are typed `Enum | str` with left-to-right union mode (MOD-3). Compare with `==` (`call.result == CallResult.REJECTED`), which works for both forms without type narrowing.
-- **Known schema bug:** `ApiKey.expires_at` and `last_used_at` are `datetime | None`, although the schema marks them non-nullable; the API really returns `null`. A fix is filed upstream. Until it lands, the contract tests allow this one difference.
+- **Known schema bug:** `ApiKeyDetails.expires_at` and `last_used_at` are `datetime | None`, although the schema marks them non-nullable; the API really returns `null`. A fix is filed upstream. Until it lands, the contract tests allow this one difference.
 
 ## Errors
 
