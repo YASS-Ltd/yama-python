@@ -2,7 +2,7 @@
 
 ## What you get back
 
-Every response is a frozen [Pydantic](https://docs.pydantic.dev/) model with the API's field names: UUIDs are `UUID`, and times are timezone-aware `datetime`s in UTC.
+Every response is a frozen [Pydantic](https://docs.pydantic.dev/) model with the API's field names: UUIDs are `UUID`, and every time is a timezone-aware `datetime` in UTC.
 
 ```python
 from yama import Yama

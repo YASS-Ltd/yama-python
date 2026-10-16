@@ -239,7 +239,7 @@ class Calls(_Resource):
         result: CallResult | str | None = None,
     ) -> Iterator[CallLogEntry]:
         """Every call that started at or after `start` and before `end`, newest first, or only
-        those to `unit`, through `building`'s intercom, or with `result`.
+        those to `unit`, through the intercom of `building`, or with `result`.
 
         `start` and `end` are timezone-aware datetimes, so one local day is from its midnight
         to the next, in any time zone. Leaving one out leaves that side of the range open, so
