@@ -79,9 +79,19 @@ Yama is moving from `getyama.ca` to `yamasystems.com` now, while no integration 
 - `pyproject.toml` already points at the new domain, since its URLs only show on PyPI. When the new host is live, one change switches the `justfile`'s schema URL, re-vendors the schema, and updates the links people can follow today: the README, the issue template config and `AGENTS.md`.
 - The old host can redirect or be retired on the API's own schedule; no released client calls it.
 
+## Requirements
+
+Requirements live in the PRD, written in [EARS](https://alistairmavin.com/ears/) form with an ID each (`RTY-2`). The PRD says what the client must do, and `design/interface.md` names the pieces; neither says how the work is split, which is up to the issues.
+
+- A requirement describes behaviour an integrator can observe. Implementation choices, such as backoff timings or module layout, aren't requirements; they live in the interface spec's defaults, the code and its docstrings.
+- Use the five EARS patterns: *The client shall…*, *When <trigger>, the client shall…*, *While <state>, the client shall…*, *If <condition>, then the client shall…*, *Where <feature>, the client shall…*. One sentence, one behaviour.
+- Behaviour is written down once. If a requirement and another doc disagree, the requirement wins; fix the other doc.
+- IDs are never reused. A dropped requirement is struck through, not renumbered.
+
 ## Testing Strategy
 
 - **Tests first:** write a failing test, then the minimum code to pass, then refactor.
+- **Tests trace requirements.** Each requirement has at least one test whose name starts with its ID, such as `test_rty_2_waits_for_retry_after`, so `grep -ri rty_2` finds the requirement's tests.
 - **Unit tests** mock single HTTP exchanges with respx. They cover each operation's request (method, path, query, body), response parsing, pagination edge cases (empty list, one page, many pages, a `next` that repeats a call), the error mapping for each status, and retry behaviour, using a fake clock so tests don't sleep.
 - **Contract tests** check the client against the vendored schema: every operation in the schema has a client method, and every request the client builds validates against the schema.
 - **An in-memory fake API** built on `httpx.MockTransport`, with no server or process. It holds a few made-up buildings, units, contacts, codes and calls in dicts and implements the real behaviours: `limit`/`offset` with `next` links, code create (honouring `Idempotency-Key`), update and delete, a 400 for a code that already exists on its unit, a 400 naming an unknown field, a 404, and a 429 with `Retry-After` on demand. Every response it returns is validated against the vendored schema, so the fake can't drift from the contract unnoticed. One scenario test drives the client through every operation an integrator uses, end to end, in milliseconds.

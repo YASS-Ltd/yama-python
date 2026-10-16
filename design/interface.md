@@ -1,15 +1,15 @@
 # Interface Spec: yama-python v0.1
 
-The public interface of the client, so everyone building it uses the same names. The vendored schema (`tests/fixtures/openapi.yaml`) is the source of truth for fields, filters and statuses; this doc settles what the schema can't: names, shapes and behaviour. Change it in the same PR as any code that departs from it.
+The public names and signatures of the client, so everyone building it uses the same ones. Behaviour is specified once, as requirements in `design/prd-v0.1.md` (IDs such as RTY-2 below point there). Fields, filters and statuses come from the vendored schema (`tests/fixtures/openapi.yaml`). Change this doc in the same PR as any code that departs from it.
 
-Anything not listed here is private. Keep it lightweight: the whole package should stay a few hundred lines.
+Anything not listed here is private. The whole package should stay a few hundred lines.
 
 ## Layout
 
 ```
 src/yama/
   __init__.py      # re-exports everything public below, plus __version__
-  _client.py       # Yama: config, auth, request, retries
+  _client.py       # Yama, DEFAULT_BASE_URL
   _pagination.py   # Paginator, Page
   _resources.py    # one small class per resource
   _errors.py       # exception classes
@@ -19,8 +19,8 @@ src/yama/
 ## Quick Look
 
 ```python
-from datetime import date, datetime, timezone
-from yama import Yama, AccessCodeCreate, AccessCodeUpdate, NotFoundError
+from datetime import date
+from yama import Yama, AccessCodeCreate, AccessCodeUpdate
 
 with Yama() as client:  # api_key from YAMA_API_KEY
     key = client.api_key.get()  # first call: what can this key do?
@@ -40,24 +40,23 @@ with Yama() as client:  # api_key from YAMA_API_KEY
 
 ```python
 Yama(
-    api_key: str | None = None,          # falls back to YAMA_API_KEY
+    api_key: str | None = None,
     *,
-    base_url: str | None = None,         # falls back to YAMA_API_BASE_URL, then DEFAULT_BASE_URL
-    timeout: float = 30.0,               # seconds, per request
-    max_retries: int = 2,                # retries after the first attempt
-    http_client: httpx.Client | None = None,  # for tests and custom transports
+    base_url: str | None = None,
+    timeout: float = 30.0,
+    max_retries: int = 2,
+    http_client: httpx.Client | None = None,
 )
 ```
 
-- No key from either source raises `YamaError` at construction.
-- `DEFAULT_BASE_URL` (in `_client.py`, `https://app.yamasystems.com`) is the only place in the code that names Yama's domain.
-- `Yama` is a context manager and has `close()`. It closes the `httpx.Client` only if it created it.
-- Attributes: `api_key`, `buildings`, `units`, `contacts`, `codes`, `calls` (resources, below). The key string itself is private (`_key`) and appears in no `repr`, log line, exception or URL.
-- Every request sends `Authorization: Bearer <key>`, `Accept: application/json` and `User-Agent: yama-python/<version> python/<major.minor>`.
+- `DEFAULT_BASE_URL` is the only place in the code that names Yama's domain (CFG-3).
+- `Yama` is a context manager and has `close()`.
+- Resource attributes: `api_key`, `buildings`, `units`, `contacts`, `codes`, `calls`. The key string is private (`_key`).
+- Waits between retries go through `Yama._sleep` (default `time.sleep`), so tests replace it instead of sleeping.
 
 ## Resources
 
-Paths are relative to `/api/v2/`. `uuid` parameters accept `UUID | str`. Filters are keyword-only and are sent only when not `None`, so a call never sends a parameter the caller didn't set.
+Paths are relative to `/api/v2/`. `uuid` parameters accept `UUID | str`. Filters are keyword-only and default to `None`.
 
 | Call | HTTP | Returns |
 |---|---|---|
@@ -70,24 +69,21 @@ Paths are relative to `/api/v2/`. `uuid` parameters accept `UUID | str`. Filters
 | `contacts.get(uuid)` | `GET contacts/{uuid}/` | `Contact` |
 | `codes.list(*, unit, code, name, search, page_size)` | `GET codes/` | `Paginator[AccessCode]` |
 | `codes.get(uuid)` | `GET codes/{uuid}/` | `AccessCode` |
-| `codes.create(data: AccessCodeCreate, *, idempotency_key)` | `POST codes/` | `AccessCode` |
+| `codes.create(data: AccessCodeCreate, *, idempotency_key: str \| None)` | `POST codes/` | `AccessCode` |
 | `codes.replace(uuid, data: AccessCodeCreate)` | `PUT codes/{uuid}/` | `AccessCode` |
 | `codes.update(uuid, data: AccessCodeUpdate)` | `PATCH codes/{uuid}/` | `AccessCode` |
 | `codes.delete(uuid)` | `DELETE codes/{uuid}/` | `None` |
-| `calls.list(*, start, end, unit, building, result, page_size)` | `GET calls/` | `Paginator[CallLogEntry]` |
+| `calls.list(*, start: date, end: date, unit, building, result, page_size)` | `GET calls/` | `Paginator[CallLogEntry]` |
 | `calls.get(uuid)` | `GET calls/{uuid}/` | `CallLogEntry` |
 
-- `page_size: int | None` is sent as `limit` (1-500; the API defaults to 100). There is no `offset` argument: the paginator follows `next`.
-- `calls.list`: `start` and `end` are `datetime.date`s, sent as ISO dates, and go together: passing only one raises `ValueError` before any request. Without them the API returns the last 30 days. The paginator skips any call whose `uuid` it has already yielded, because new calls shift pages while you read.
-- `codes.create` sends an `Idempotency-Key` header: `idempotency_key: str | None` if given, otherwise a fresh `uuid4`, kept the same across retries of that call. Pass your own key to make a create safe to repeat across process restarts, such as one derived from a record in your system.
-- `codes.update` sends only the fields set on the model (`model_dump(exclude_unset=True)`), so `AccessCodeUpdate(expires_at=None)` clears the expiry and `AccessCodeUpdate(name="Cleaner")` leaves it alone.
+There is no `offset` argument; the paginator follows `next` (PAG-1).
 
 ## Pagination
 
 ```python
 class Paginator(Generic[T]):        # returned by every list()
-    def __iter__(self) -> Iterator[T]        # every item, lazily, following `next`
-    def pages(self) -> Iterator[Page[T]]     # page by page
+    def __iter__(self) -> Iterator[T]
+    def pages(self) -> Iterator[Page[T]]
 
 class Page(BaseModel, Generic[T]):
     count: int
@@ -96,41 +92,29 @@ class Page(BaseModel, Generic[T]):
     results: list[T]
 ```
 
-Nothing is requested until iteration starts. Each `next` URL is requested as given, never rebuilt. Iterating twice makes the requests twice.
-
 ## Models (`yama.models`)
 
-Response models mirror the schema's components field for field: `ApiKey` (with `ApiKeyPermissions`, `ApiKeyUnitAccess`), `Building`, `Unit`, `Contact`, `AccessCode`, `CallLogEntry`, `CallLogStep`.
-
-- **Responses** are frozen and keep unknown fields (`ConfigDict(extra="allow", frozen=True)`), so a field added within v2 is readable before the client knows about it.
-- **Requests** forbid unknown fields (`extra="forbid"`), catching typos before the API's 400 would. `AccessCodeCreate`: `unit: UUID`, `code: str`, `name: str | None = None`, `expires_at: AwareDatetime | None = None`. `AccessCodeUpdate`: the same fields, all optional.
+- **Responses**, mirroring the schema's components field for field: `ApiKey` (with `ApiKeyPermissions`, `ApiKeyUnitAccess`), `Building`, `Unit`, `Contact`, `AccessCode`, `CallLogEntry`, `CallLogStep`. Frozen, with `extra="allow"` (MOD-2).
+- **Requests:** `AccessCodeCreate` (`unit: UUID`, `code: str`, `name: str | None = None`, `expires_at: AwareDatetime | None = None`) and `AccessCodeUpdate` (the same fields, all optional). `extra="forbid"` (MOD-4).
+- **Enums**, as `str` enums: `CallResult`, `CallStepKind`, `CodeAttemptResult`, `DialStatus`, `DoorDigit`, `AccessLevel` (`none`/`read`/`write`) and `UnitAccessType`. Response fields are typed `Enum | str` with left-to-right union mode (MOD-3).
 - **Known schema bug:** `ApiKey.expires_at` and `last_used_at` are `datetime | None`, although the schema marks them non-nullable; the API really returns `null`. A fix is filed upstream. Until it lands, the contract tests allow this one difference.
-- **Types:** `uuid` fields are `UUID`, datetimes are timezone-aware `datetime`s, and the dates the client sends are `date`s.
-- **Enums** are `str` enums, so members equal their string values: `CallResult`, `CallStepKind`, `CodeAttemptResult`, `DialStatus`, `DoorDigit`, `AccessLevel` (`none`/`read`/`write`) and `UnitAccessType`. Response fields are typed `Enum | str` with left-to-right union mode, so a value the client doesn't know arrives as a plain `str` rather than an error.
 
 ## Errors
 
 ```
-YamaError                       # base; also raised for client misconfiguration
+YamaError                       # base; also raised for misconfiguration (CFG-2)
 ├── APIConnectionError          # network failure or timeout, after retries
-└── APIStatusError              # any non-2xx response
+└── APIStatusError              # any other non-2xx: status_code, detail, body, api_version
     ├── BadRequestError         # 400; .errors: dict[str, list[str]]
-    ├── AuthenticationError     # 401: bad, expired or missing key
-    ├── PermissionDeniedError   # 403: the key lacks the permission
+    ├── AuthenticationError     # 401
+    ├── PermissionDeniedError   # 403
     ├── NotFoundError           # 404
     ├── RateLimitError          # 429; .retry_after: int | None (seconds)
     └── ServerError             # 5xx
 ```
 
-`APIStatusError` carries `status_code`, `detail` (the body's `detail` string, if any), `body` (parsed JSON, or text) and `api_version` (the `API-Version` header). Its message is `"<status> <detail>"`, and never includes the key or request headers. Other statuses (405, 415) raise `APIStatusError` itself.
+An error's message is `"<status> <detail>"`.
 
-## Retries
+## Implementation Defaults
 
-- Retried: 429, 5xx, and `httpx.TransportError`, up to `max_retries` times.
-- Wait: a 429's `Retry-After` when present. Otherwise exponential backoff with jitter, starting at 0.5 s and capped at 8 s. A `Retry-After` over 60 s isn't waited out: the client raises `RateLimitError` straight away.
-- Every method retries the same way, `codes.create` included: its `Idempotency-Key` makes a repeated create return the first result instead of failing as a duplicate. A `409` on a create (the same key still in flight) is retried too. The header's exact semantics follow the API's idempotency design once it's published; update this section to match.
-- Waiting goes through `Yama._sleep` (default `time.sleep`), so tests replace it rather than sleep.
-
-## Out of Scope for v0.1
-
-Async (the split between building a request and sending it should make `AsyncYama` a small addition later), a CLI, logging hooks, and anything the API doesn't expose.
+Choices that aren't requirements, recorded so they're consistent: backoff starts at 0.5 s, doubles, is capped at 8 s, with full jitter. Async isn't in v0.1; keeping request building separate from sending should make an `AsyncYama` a small addition later.

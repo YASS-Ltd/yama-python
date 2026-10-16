@@ -47,7 +47,7 @@ API conventions the client must handle:
 
 - Use [uv](https://docs.astral.sh/uv/) for every Python command, as in django-poc.
 - Use the [just](https://just.systems/man/en/) recipes when one exists (`just --list`); `just check` runs what CI runs. Releases go through `just release` (try `just release --dry-run` first) and publish from CI, never from a local machine. The process is in `design/engineering-foundations.md`.
-- **Tests first**: write a failing test, implement the minimum change, refactor while green.
+- **Tests first**: write a failing test, implement the minimum change, refactor while green. Name each test after the requirement it checks (`test_rty_2_...`).
 - Tests must not call the production API. Use recorded or mocked HTTP responses, plus contract checks against the schema.
 - Never commit API keys, even expired ones, or real responses containing customer data.
 
@@ -61,7 +61,7 @@ API conventions the client must handle:
 Work is tracked in GitHub Issues on `YASS-Ltd/yama-python` and planned on a GitHub Project board. Issues are public, so write them for outside readers. Use the `gh` CLI:
 
 - Find work: `gh issue list`, `gh issue view <n> --comments`.
-- New work: `gh issue create` using the templates in `.github/ISSUE_TEMPLATE/`. A task issue has just **Why** and **Done when** (a checkbox list). Keep it short; the plan and the detail belong in the PR, not the issue.
+- New work: `gh issue create` using the templates in `.github/ISSUE_TEMPLATE/`. A task issue has just **Why** and **Done when** (a checkbox list). Where the PRD has requirements for the work, **Done when** lists their IDs (`RTY-1` to `RTY-6`) instead of restating them. Keep it short; the plan and the detail belong in the PR, not the issue.
 - Optionally label an issue `model:haiku-ok`, `model:sonnet-recommended` or `model:opus-recommended` to say which model tier should implement it.
 - Progress: put `Closes #<n>` in the PR so merging closes the issue.
 - Triage: label new outside issues (`bug`, `enhancement`, `question`) and add them to the Project, or reply and close them.
