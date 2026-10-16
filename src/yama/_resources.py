@@ -196,9 +196,8 @@ class Codes(_Resource):
             raise
 
     def replace(self, uuid: UUID | str, data: AccessCodeCreate) -> AccessCode:
-        """Replace an access code. Leaving `expires_at` unset keeps the current expiry, and
-        None clears it. The API doesn't say what leaving `name` unset does, so pass the name
-        the code should have."""
+        """Replace an access code. Leaving `name` or `expires_at` unset keeps its current
+        value, and None clears it."""
         body = _body(data, AccessCodeCreate)
         return parse(AccessCode, self._client._request("PUT", f"codes/{_uuid(uuid)}/", json=body))
 

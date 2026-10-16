@@ -39,7 +39,7 @@ info:
     Send the key as a Bearer token on every request:
 
     ```sh
-    export YAMA_API_BASE_URL=https://app.getyama.ca
+    export YAMA_API_BASE_URL=https://app.yamasystems.com
     read -rs YAMA_API_KEY && export YAMA_API_KEY   # paste the key; it is not echoed
 
     curl -s -H "Authorization: Bearer $YAMA_API_KEY" "$YAMA_API_BASE_URL/api/v2/units/?limit=2"
@@ -48,7 +48,7 @@ info:
     ```json
     {
       "count": 11,
-      "next": "https://app.getyama.ca/api/v2/units/?limit=2&offset=2",
+      "next": "https://app.yamasystems.com/api/v2/units/?limit=2&offset=2",
       "previous": null,
       "results": [
         {"uuid": "dd1053d5-0a4b-4c0d-a619-6a1457d97de6", "building": "5f0c3b8e-8a52-4a38-9f57-1d2b6c0e4a11", "name": "Unit 101", "door_digit": "9", "dial_in_number": "+12365550100"},
@@ -113,7 +113,7 @@ info:
     Every list returns a page envelope:
 
     ```json
-    {"count": 11, "next": "https://app.getyama.ca/api/v2/units/?limit=2&offset=2", "previous": null, "results": [...]}
+    {"count": 11, "next": "https://app.yamasystems.com/api/v2/units/?limit=2&offset=2", "previous": null, "results": [...]}
     ```
 
     - `limit` is the page size: 100 by default, 1 to 500. `offset` is how many items to skip. A value out of range or not a whole number is a `400`.
@@ -173,14 +173,14 @@ info:
     The version is in the path (`/api/v2/`), and every response, errors included, carries an `API-Version: v2` header. `GET /api/` lists the available versions:
 
     ```json
-    {"current": "v2", "versions": [{"version": "v2", "status": "current", "url": "https://app.getyama.ca/api/v2/"}]}
+    {"current": "v2", "versions": [{"version": "v2", "status": "current", "url": "https://app.yamasystems.com/api/v2/"}]}
     ```
 
     Within v2, changes are additive only: new endpoints, new optional inputs, new response fields and new filters. Anything that could break a working client, such as removing or renaming a field or endpoint, changing a type or meaning, adding a required input or tightening validation, ships as a new version (`/api/v3/`), and v2 keeps running for the notice period in Yama's Terms of Service. Write your client to ignore unknown fields and it will keep working across additive changes.
 
     ## 4. Worked examples
 
-    These examples ran against a Yama test server with a key holding **Access codes: Read and write** and **Call log: Read** on all units; the responses below are what it returned, with the host replaced by `app.getyama.ca`. Your UUIDs will differ. The curl examples assume `YAMA_API_BASE_URL` and `YAMA_API_KEY` are set as in step 2.
+    These examples ran against a Yama test server with a key holding **Access codes: Read and write** and **Call log: Read** on all units; the responses below are what it returned, with the host replaced by `app.yamasystems.com`. Your UUIDs will differ. The curl examples assume `YAMA_API_BASE_URL` and `YAMA_API_KEY` are set as in step 2.
 
     ### 1. List your buildings, then a building's units
 
@@ -308,7 +308,7 @@ info:
     {"expires_at": ["Expiry must be in the future."]}
     ```
 
-    The one exception: sending back a code's current `expires_at` unchanged is accepted even after it has passed, so you can `PUT` back a code you fetched earlier. `PUT` takes the whole code (`unit` and `code` are required); like `PATCH`, it leaves the expiry alone unless you send `expires_at`.
+    The one exception: sending back a code's current `expires_at` unchanged is accepted even after it has passed, so you can `PUT` back a code you fetched earlier. `PUT` takes the whole code (`unit` and `code` are required); like `PATCH`, it leaves `name` and the expiry alone unless you send them, and `null` clears either.
 
     ### 5. Delete a code
 
@@ -344,7 +344,7 @@ info:
     ```json
     {
       "count": 4,
-      "next": "https://app.getyama.ca/api/v2/calls/?end=2026-10-31&limit=2&offset=2&start=2026-10-01&unit=dd1053d5-0a4b-4c0d-a619-6a1457d97de6",
+      "next": "https://app.yamasystems.com/api/v2/calls/?end=2026-10-31&limit=2&offset=2&start=2026-10-01&unit=dd1053d5-0a4b-4c0d-a619-6a1457d97de6",
       "previous": null,
       "results": [
         {
@@ -397,7 +397,7 @@ info:
     {
       "count": 4,
       "next": null,
-      "previous": "https://app.getyama.ca/api/v2/calls/?end=2026-10-31&limit=2&start=2026-10-01&unit=dd1053d5-0a4b-4c0d-a619-6a1457d97de6",
+      "previous": "https://app.yamasystems.com/api/v2/calls/?end=2026-10-31&limit=2&start=2026-10-01&unit=dd1053d5-0a4b-4c0d-a619-6a1457d97de6",
       "results": [
         {"uuid": "9de1afc1-2158-4680-9c94-f0c2229d513a", "reference": "6A26E5", "started_at": "2026-10-10T22:09:09.743719Z", "duration_seconds": 22, "result": "code_not_accepted", "result_label": "Not accepted", "summary": "9999 · Not accepted", "imported": false, "steps": ["...3 steps..."]},
         {"uuid": "793289bc-6f58-4c7b-bd54-c4365953278b", "reference": "E191C4", "started_at": "2026-10-10T22:09:08.902359Z", "duration_seconds": 14, "result": "code_accepted", "result_label": "Accepted", "summary": "Primary Code · Accepted", "imported": false, "steps": ["...4 steps..."]}
@@ -428,7 +428,7 @@ info:
 
     import requests
 
-    BASE_URL = os.environ["YAMA_API_BASE_URL"]  # e.g. https://app.getyama.ca
+    BASE_URL = os.environ["YAMA_API_BASE_URL"]  # e.g. https://app.yamasystems.com
     API = f"{BASE_URL}/api/v2"
 
     session = requests.Session()
@@ -2135,11 +2135,16 @@ components:
         name:
           type: string
           nullable: true
+          description: A label for the code, such as who it's for. Omitting it on
+            `PUT` or `PATCH` leaves it unchanged; `null` clears it.
           maxLength: 255
         expires_at:
           type: string
           format: date-time
           nullable: true
+          description: When the code stops opening the door, in UTC. Omitting it on
+            `PUT` or `PATCH` leaves it unchanged; `null` clears it, so the code never
+            expires.
       required:
       - code
       - unit
@@ -2159,11 +2164,16 @@ components:
         name:
           type: string
           nullable: true
+          description: A label for the code, such as who it's for. Omitting it on
+            `PUT` or `PATCH` leaves it unchanged; `null` clears it.
           maxLength: 255
         expires_at:
           type: string
           format: date-time
           nullable: true
+          description: When the code stops opening the door, in UTC. Omitting it on
+            `PUT` or `PATCH` leaves it unchanged; `null` clears it, so the code never
+            expires.
       required:
       - code
       - unit
@@ -2573,12 +2583,12 @@ components:
           type: string
           nullable: true
           format: uri
-          example: https://app.getyama.ca/api/v2/codes/?limit=100&offset=200
+          example: https://app.yamasystems.com/api/v2/codes/?limit=100&offset=200
         previous:
           type: string
           nullable: true
           format: uri
-          example: https://app.getyama.ca/api/v2/codes/?limit=100
+          example: https://app.yamasystems.com/api/v2/codes/?limit=100
         results:
           type: array
           items:
@@ -2596,12 +2606,12 @@ components:
           type: string
           nullable: true
           format: uri
-          example: https://app.getyama.ca/api/v2/buildings/?limit=100&offset=200
+          example: https://app.yamasystems.com/api/v2/buildings/?limit=100&offset=200
         previous:
           type: string
           nullable: true
           format: uri
-          example: https://app.getyama.ca/api/v2/buildings/?limit=100
+          example: https://app.yamasystems.com/api/v2/buildings/?limit=100
         results:
           type: array
           items:
@@ -2619,12 +2629,12 @@ components:
           type: string
           nullable: true
           format: uri
-          example: https://app.getyama.ca/api/v2/calls/?limit=100&offset=200
+          example: https://app.yamasystems.com/api/v2/calls/?limit=100&offset=200
         previous:
           type: string
           nullable: true
           format: uri
-          example: https://app.getyama.ca/api/v2/calls/?limit=100
+          example: https://app.yamasystems.com/api/v2/calls/?limit=100
         results:
           type: array
           items:
@@ -2642,12 +2652,12 @@ components:
           type: string
           nullable: true
           format: uri
-          example: https://app.getyama.ca/api/v2/contacts/?limit=100&offset=200
+          example: https://app.yamasystems.com/api/v2/contacts/?limit=100&offset=200
         previous:
           type: string
           nullable: true
           format: uri
-          example: https://app.getyama.ca/api/v2/contacts/?limit=100
+          example: https://app.yamasystems.com/api/v2/contacts/?limit=100
         results:
           type: array
           items:
@@ -2665,12 +2675,12 @@ components:
           type: string
           nullable: true
           format: uri
-          example: https://app.getyama.ca/api/v2/units/?limit=100&offset=200
+          example: https://app.yamasystems.com/api/v2/units/?limit=100&offset=200
         previous:
           type: string
           nullable: true
           format: uri
-          example: https://app.getyama.ca/api/v2/units/?limit=100
+          example: https://app.yamasystems.com/api/v2/units/?limit=100
         results:
           type: array
           items:
@@ -2690,11 +2700,16 @@ components:
         name:
           type: string
           nullable: true
+          description: A label for the code, such as who it's for. Omitting it on
+            `PUT` or `PATCH` leaves it unchanged; `null` clears it.
           maxLength: 255
         expires_at:
           type: string
           format: date-time
           nullable: true
+          description: When the code stops opening the door, in UTC. Omitting it on
+            `PUT` or `PATCH` leaves it unchanged; `null` clears it, so the code never
+            expires.
     Unit:
       type: object
       properties:
@@ -2754,7 +2769,7 @@ components:
       scheme: bearer
       bearerFormat: API key
 servers:
-- url: https://app.getyama.ca
+- url: https://app.yamasystems.com
 tags:
 - name: codes
   x-displayName: Access codes

@@ -208,6 +208,16 @@ def test_test_1_rejects_an_expiry_in_the_past(api: httpx.Client) -> None:
         assert response.json() == {"expires_at": ["Expiry must be in the future."]}
 
 
+def test_test_1_replace_without_name_or_expiry_keeps_them(api: httpx.Client) -> None:
+    unit = everything(api, "units/")[0]["uuid"]
+    body = {"unit": unit, "code": "98765", "name": "Cleaner", "expires_at": "2099-01-01T00:00:00Z"}
+    code = api.post("codes/", json=body).json()
+    url = f"codes/{code['uuid']}/"
+    assert api.put(url, json={"unit": unit, "code": "98766"}).json() == {**code, "code": "98766"}
+    cleared = api.put(url, json={"unit": unit, "code": "98766", "name": None, "expires_at": None})
+    assert cleared.json() == {**code, "code": "98766", "name": None, "expires_at": None}
+
+
 def test_test_1_accepts_a_codes_current_expiry_sent_back_after_it_passed(
     api: httpx.Client,
 ) -> None:
