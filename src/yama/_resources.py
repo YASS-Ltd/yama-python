@@ -6,6 +6,7 @@ from collections import deque
 from collections.abc import Iterator
 from datetime import date, datetime, timedelta, timezone
 from enum import Enum
+from itertools import takewhile
 from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
@@ -242,7 +243,8 @@ class Calls(_Resource):
 
         `start` and `end` are timezone-aware datetimes, so one local day is from its midnight
         to the next, in any time zone. Leaving one out leaves that side of the range open, so
-        with neither you get all history. A call that shifts onto the next page as new calls
+        with neither you get all history. Paging stops at the first call before `start`, so
+        polling for recent calls is cheap. A call that shifts onto the next page as new calls
         arrive is yielded once.
 
         Raises:
@@ -267,12 +269,9 @@ class Calls(_Resource):
             **_filters(unit=_uuid_filter(unit), building=_uuid_filter(building), result=result),
         }
         calls = _unique(self._client._list("calls/", CallLogEntry, params))
-        return (
-            call
-            for call in calls
-            if (start is None or call.started_at >= start)
-            and (end is None or call.started_at < end)
-        )
+        if start is not None:  # newest first by `started_at`, so stop at the first older call
+            calls = takewhile(lambda call: call.started_at >= start, calls)
+        return (call for call in calls if end is None or call.started_at < end)
 
     def get(self, uuid: UUID | str) -> CallLogEntry:
         """One call, whatever its date. Raises `NotFoundError` if it isn't within reach."""

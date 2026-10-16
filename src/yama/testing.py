@@ -235,6 +235,7 @@ class _FakeAPI:
         if resource == "calls":
             first, last = _date_range(query.pop("start", None), query.pop("end", None), errors)
             items = [c for c in items if first <= c["started_at"][:10] <= last]
+            items.sort(key=lambda c: c["started_at"], reverse=True)  # newest first, as the API
         if errors:
             return _json(400, errors)
         search = query.pop("search", None)

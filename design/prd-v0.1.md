@@ -95,6 +95,7 @@ Written in [EARS](https://alistairmavin.com/ears/) form: each is one testable se
 - **CALL-4** While iterating the call log, the client shall yield only calls whose `started_at` is at or after `start` and before `end`.
 - **CALL-5** If `start` or `end` is not a timezone-aware `datetime`, then the client shall raise without sending a request: `TypeError` for a `date` or other type, `ValueError` for a naive `datetime`.
 - **CALL-6** If `end` is before `start`, then the client shall raise `ValueError` without sending a request; an `end` equal to `start` is an empty range.
+- **CALL-7** When `start` is given, the client shall stop requesting pages once it reaches a call that started before `start`, since the API returns calls newest first by `started_at`.
 
 ### Access codes (CODE)
 
