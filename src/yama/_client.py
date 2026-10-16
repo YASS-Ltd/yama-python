@@ -204,10 +204,12 @@ class Yama:
         max_retries: How many times to retry a request after a 429, a 5xx or a network error.
         http_client: Your own `httpx.Client` to send through. The client applies its own
             URL, timeout and headers to each request, and leaves closing it to you.
+            An `httpx.AsyncClient` isn't supported.
 
     Raises:
         YamaError: No API key was given.
         ValueError: The API key isn't printable ASCII without spaces, once stripped.
+        TypeError: `http_client` isn't an `httpx.Client`.
     """
 
     api_key: ApiKeyResource
@@ -244,6 +246,8 @@ class Yama:
         base_url = base_url or os.environ.get("YAMA_API_BASE_URL") or DEFAULT_BASE_URL
         if not base_url.startswith(("https://", "http://")):
             raise ValueError("base_url must start with https:// or http://.")
+        if http_client is not None and not isinstance(http_client, httpx.Client):
+            raise TypeError("http_client must be an httpx.Client: the client isn't async yet.")
 
         self._key = api_key
         self._base_url = base_url.rstrip("/")

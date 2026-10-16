@@ -30,6 +30,43 @@ def view_client() -> Yama:
 units = list(view_client().units.list())
 ```
 
+## Async code
+
+The client is synchronous for now: each call blocks until it has an answer, and `http_client` must be an `httpx.Client`, not an `httpx.AsyncClient`. Async support is planned for a later release. Until then, run calls in a worker thread so they don't block the event loop. The client is safe to share between threads, so one client still serves the whole process.
+
+`asyncio.to_thread()` runs a call in a thread and awaits the result. Lists are fetched lazily as you iterate, so collect them inside the thread with `list()`, or the pages are fetched on the event loop:
+
+```python
+import asyncio
+
+from yama import Yama
+
+client = Yama()
+
+
+async def unit_names() -> list[str]:
+    units = await asyncio.to_thread(lambda: list(client.units.list()))
+    return [unit.name for unit in units]
+
+
+async def dashboard() -> None:
+    names, codes = await asyncio.gather(
+        unit_names(),
+        asyncio.to_thread(lambda: list(client.codes.list())),
+    )
+    print(f"{len(names)} units, {len(codes)} codes")
+
+
+asyncio.run(dashboard())
+```
+
+Frameworks have their own ways to do the same:
+
+- **FastAPI and Starlette** run an endpoint declared with plain `def`, not `async def`, in a thread pool, so it can call the client directly.
+- **Django** async views can wrap a call in `asgiref.sync.sync_to_async`. Pass `thread_sensitive=False`, or calls queue behind each other on Django's one shared thread.
+
+Cancelling the awaiting task doesn't stop a call already running in its thread: it carries on, within its timeout and retries, and its result is dropped. That matters for a create, which may still happen. Pass an `idempotency_key` you can repeat (see [Creates that are safe to repeat](errors.md#creates-that-are-safe-to-repeat)).
+
 ## Creates in jobs that may re-run
 
 A job queue may run a task twice: a retry after a timeout, a worker that died part-way, or at-least-once delivery. Give such a create a stable `idempotency_key`, derived from your own record, so a repeat within 24 hours returns the code made the first time instead of making a second one (see [Creates that are safe to repeat](errors.md#creates-that-are-safe-to-repeat)):

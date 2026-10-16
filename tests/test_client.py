@@ -149,6 +149,11 @@ def test_cfg_5_closes_only_its_own_connection() -> None:
     assert client._http.is_closed
 
 
+def test_cfg_5_rejects_an_async_client_when_constructed() -> None:
+    with pytest.raises(TypeError, match="async"):
+        Yama(KEY, http_client=httpx.AsyncClient())  # type: ignore[arg-type]
+
+
 def test_cfg_6_with_options_returns_a_copy_sharing_the_connections() -> None:
     handler, requests = recorder(respond(503), respond(body={"ok": True}))
     client, _ = make_client(handler, base_url="https://yama.example")
