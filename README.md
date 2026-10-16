@@ -36,7 +36,7 @@ uv add yama        # or: pip install yama
 ## Quick start
 
 ```python
-from datetime import date
+from datetime import datetime, timezone
 
 from yama import Yama
 
@@ -45,7 +45,9 @@ client = Yama()  # reads YAMA_API_KEY
 for code in client.codes.list():
     print(code.name, code.expires_at)
 
-for call in client.calls.list(start=date(2026, 10, 1), end=date(2026, 10, 31)):
+start = datetime(2026, 10, 1, tzinfo=timezone.utc)
+end = datetime(2026, 11, 1, tzinfo=timezone.utc)  # exclusive: all of October
+for call in client.calls.list(start=start, end=end):
     print(call.started_at, call.result)
 ```
 
@@ -55,7 +57,7 @@ Create a key in the Yama portal under **Settings › API keys**. Keep it in an e
 
 - **Typed:** Pydantic models with UTC-aware datetimes, so your editor autocompletes.
 - **Every page:** iterating a list follows `next` to the end, and the call log is de-duplicated.
-- **Safe retries:** only on 5xx, 429 (honouring `Retry-After`) and network errors.
+- **Safe retries:** on 429 (honouring `Retry-After`) and failures to connect for every call, and on 5xx and other network errors for every call that's safe to repeat: reads, replaces, updates, deletes, and creates, which carry an `Idempotency-Key` so a code is never created twice.
 - **Clear errors:** one exception class per kind of failure, listed in the [docs](https://yass-ltd.github.io/yama-python/).
 - **Forward-compatible:** new fields and enum values from the API don't break your code.
 - **Small:** two dependencies, httpx and Pydantic. Python 3.10 and newer.

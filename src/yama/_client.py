@@ -6,6 +6,7 @@ functions free of I/O; `Yama` only sends with httpx and sleeps.
 
 from __future__ import annotations
 
+import copy
 import logging
 import os
 import random
@@ -25,13 +26,16 @@ from yama._errors import (
     AuthenticationError,
     BadRequestError,
     ConflictError,
+    GoneError,
     NotFoundError,
     PermissionDeniedError,
     RateLimitError,
     ServerError,
+    UnprocessableEntityError,
     YamaError,
 )
 from yama._pagination import T, paginate
+from yama._resources import ApiKeyResource, Buildings, Calls, Codes, Contacts, Units
 
 DEFAULT_BASE_URL = "https://app.yamasystems.com"
 """Where the client sends requests unless `base_url` or `YAMA_API_BASE_URL` says otherwise."""
@@ -44,11 +48,15 @@ _ERRORS: dict[int, type[APIStatusError]] = {
     403: PermissionDeniedError,
     404: NotFoundError,
     409: ConflictError,
+    410: GoneError,
+    422: UnprocessableEntityError,
     429: RateLimitError,
 }
 # Retried: the connection failed or broke, or an attempt timed out. Other httpx errors (an
 # unsupported scheme, a bad header, a proxy refusal, too many redirects) would fail again.
 _TRANSPORT_FAILURES = (httpx.TimeoutException, httpx.NetworkError, httpx.RemoteProtocolError)
+# Of those, the ones where the request never left the client, so the API can't have run it.
+_NOT_SENT = (httpx.ConnectError, httpx.ConnectTimeout, httpx.PoolTimeout)
 _OMITTED: Any = object()
 _logger = logging.getLogger("yama")
 
@@ -64,22 +72,53 @@ def _retry_after(response: httpx.Response) -> int | None:
 
 
 def _retry_wait(
-    attempt: int, max_retries: int, result: httpx.Response | httpx.HTTPError
+    attempt: int,
+    max_retries: int,
+    request: httpx.Request,
+    result: httpx.Response | httpx.HTTPError,
 ) -> float | None:
-    """Seconds to wait before retrying after `attempt` (from 1) failed with `result`, a
-    response or an httpx error; None means don't retry."""
+    """Seconds to wait before retrying `request` after `attempt` (from 1) failed with
+    `result`, a response or an httpx error; None means don't retry.
+
+    A 429, or a failure to connect, means the API never ran the request, so any method is
+    retried. A 5xx or any other network failure may come after the API ran it, so a POST is
+    retried only with an `Idempotency-Key` (whose 409 means "still running"); every other
+    method is safe to repeat.
+    """
     if attempt > max_retries:
         return None
+    keyed = "Idempotency-Key" in request.headers
+    replayable = keyed or request.method != "POST"
     if isinstance(result, httpx.HTTPError):
-        return _backoff(attempt) if isinstance(result, _TRANSPORT_FAILURES) else None
-    response = result
-    status = response.status_code
-    if status != 429 and status < 500:
+        if isinstance(result, _NOT_SENT) or (
+            replayable and isinstance(result, _TRANSPORT_FAILURES)
+        ):
+            return _backoff(attempt)
         return None
-    retry_after = _retry_after(response) if status == 429 else None
-    if retry_after is None:
+    status = result.status_code
+    if status == 429 or (status == 409 and keyed):
+        retry_after = _retry_after(result)
+        if retry_after is not None:
+            return retry_after if retry_after <= _MAX_RETRY_AFTER else None
         return _backoff(attempt)
-    return retry_after if retry_after <= _MAX_RETRY_AFTER else None
+    return _backoff(attempt) if status >= 500 and replayable else None
+
+
+def _check_timeout(timeout: object) -> httpx.Timeout:
+    if isinstance(timeout, bool) or not isinstance(timeout, (int, float, httpx.Timeout)):
+        raise TypeError(
+            "timeout must be a number of seconds or an httpx.Timeout; "
+            "for no timeout at all, pass httpx.Timeout(None)."
+        )
+    return timeout if isinstance(timeout, httpx.Timeout) else httpx.Timeout(timeout)
+
+
+def _check_max_retries(max_retries: object) -> int:
+    if isinstance(max_retries, bool) or not isinstance(max_retries, int):
+        raise TypeError("max_retries must be an int.")
+    if max_retries < 0:
+        raise ValueError("max_retries must be 0 or more.")
+    return max_retries
 
 
 def _status_error(request: httpx.Request, response: httpx.Response) -> APIStatusError:
@@ -192,24 +231,51 @@ class Yama:
         base_url = base_url or os.environ.get("YAMA_API_BASE_URL") or DEFAULT_BASE_URL
         if not base_url.startswith(("https://", "http://")):
             raise ValueError("base_url must start with https:// or http://.")
-        if isinstance(timeout, bool) or not isinstance(timeout, (int, float, httpx.Timeout)):
-            raise TypeError(
-                "timeout must be a number of seconds or an httpx.Timeout; "
-                "for no timeout at all, pass httpx.Timeout(None)."
-            )
-        if isinstance(max_retries, bool) or not isinstance(max_retries, int):
-            raise TypeError("max_retries must be an int.")
-        if max_retries < 0:
-            raise ValueError("max_retries must be 0 or more.")
 
         self._key = api_key
         self._base_url = base_url.rstrip("/")
-        self._timeout = timeout if isinstance(timeout, httpx.Timeout) else httpx.Timeout(timeout)
-        self._max_retries = max_retries
+        self._timeout = _check_timeout(timeout)
+        self._max_retries = _check_max_retries(max_retries)
         self._owns_http = http_client is None
         self._closed = False
         self._http = http_client or httpx.Client()
         self._sleep: Callable[[float], None] = time.sleep
+        self._attach()
+
+    def _attach(self) -> None:
+        self.api_key = ApiKeyResource(self)
+        """The API key the client uses: what it may do."""
+        self.buildings = Buildings(self)
+        """Your buildings."""
+        self.units = Units(self)
+        """Your units."""
+        self.contacts = Contacts(self)
+        """The contacts on your units."""
+        self.codes = Codes(self)
+        """The access codes on your units."""
+        self.calls = Calls(self)
+        """The call log."""
+
+    def with_options(
+        self,
+        *,
+        timeout: float | httpx.Timeout = _OMITTED,
+        max_retries: int = _OMITTED,
+    ) -> Yama:
+        """A copy of the client with a different `timeout` or `max_retries`, sharing its
+        connections, key and base URL, such as a fail-fast client for a web view.
+
+        Closing the copy leaves the connections open; closing this client closes them for
+        both.
+        """
+        clone = copy.copy(self)
+        if timeout is not _OMITTED:
+            clone._timeout = _check_timeout(timeout)
+        if max_retries is not _OMITTED:
+            clone._max_retries = _check_max_retries(max_retries)
+        clone._owns_http = False
+        clone._attach()
+        return clone
 
     def __repr__(self) -> str:
         return f"Yama(base_url={self._base_url!r})"
@@ -265,6 +331,7 @@ class Yama:
             timeout=self._timeout,
         )
         attempt = 0
+        may_have_run = False  # whether an earlier attempt may have reached the API (RTY-8)
         while True:
             attempt += 1
             started = time.monotonic()
@@ -290,10 +357,17 @@ class Yama:
             if response is not None:
                 if response.is_success:
                     return _success(request, response)
+                if may_have_run and request.method == "DELETE" and response.status_code == 404:
+                    return None  # an earlier attempt deleted it (RTY-8)
                 error = _status_error(request, response)
-            wait = _retry_wait(attempt, self._max_retries, result)
+            wait = _retry_wait(attempt, self._max_retries, request, result)
             if wait is None:
                 raise error
+            # A 429 or a failure to connect means the API never ran it; anything else retried may.
+            may_have_run |= not (
+                isinstance(result, _NOT_SENT)
+                or (response is not None and response.status_code == 429)
+            )
             _log(
                 logging.INFO,
                 "Retrying %(method)s %(path)s in %(wait).2fs (attempt %(attempt)d) "

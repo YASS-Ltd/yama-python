@@ -79,7 +79,11 @@ def test_log_3_keeps_secrets_and_payloads_out_and_logs_nothing_above_info(
     client, _ = make_client(handler)
     with pytest.raises(YamaError):
         client._request(
-            "POST", "codes/", params={"code": "4321"}, json={"code": "4321", "name": "Cleaner"}
+            "POST",
+            "codes/",
+            params={"code": "4321"},
+            json={"code": "4321", "name": "Cleaner"},
+            headers={"Idempotency-Key": "4321"},
         )
     assert len(log.records) == 5  # three attempts, two retries
     assert all(r.levelno < logging.WARNING for r in log.records)

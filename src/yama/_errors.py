@@ -6,6 +6,10 @@ from __future__ import annotations
 class YamaError(Exception):
     """Base class for every error the client raises, and raised itself for misconfiguration."""
 
+    idempotency_key: str | None = None
+    """The `Idempotency-Key` a failed `codes.create` sent, so you can retry with it; None for
+    any other call."""
+
 
 class APIConnectionError(YamaError):
     """The request failed at the network level, after retries. It may never have been sent."""
@@ -70,7 +74,18 @@ class NotFoundError(APIStatusError):
 
 
 class ConflictError(APIStatusError):
-    """409: in v0.1, an idempotency key still being processed."""
+    """409: a request with the same `Idempotency-Key` is still being processed, after
+    retries."""
+
+
+class GoneError(APIStatusError):
+    """410: a create replayed with its `Idempotency-Key` did happen, but the code it created
+    has since been deleted or is out of the key's reach. Don't create it again with that key."""
+
+
+class UnprocessableEntityError(APIStatusError):
+    """422: the `Idempotency-Key` was already used with a different request. Each create needs
+    its own key."""
 
 
 class RateLimitError(APIStatusError):

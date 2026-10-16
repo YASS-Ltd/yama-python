@@ -4,6 +4,7 @@ Strict means a field the schema doesn't define is an error, so the fake API
 can't drift from the real one by adding or misspelling fields.
 """
 
+import json
 import re
 from functools import cache
 from pathlib import Path
@@ -47,19 +48,51 @@ def validate(component: str, instance: object) -> None:
     )
 
 
-def validate_response(response: httpx.Response) -> None:
-    """Raise unless the schema documents `response`'s status for its operation, and its body
-    matches that status's schema exactly."""
-    request = response.request
+def operations() -> dict[str, dict[str, Any]]:
+    """Every operation in the schema, by its `operationId`."""
+    return {
+        operation["operationId"]: operation
+        for path in _schema()["paths"].values()
+        for operation in path.values()
+    }
+
+
+def operation(request: httpx.Request) -> dict[str, Any]:
+    """The schema's operation for `request`."""
     paths = _schema()["paths"]
     template = next(
         (t for t in paths if re.fullmatch(re.sub(r"\{\w+\}", "[^/]+", t), request.url.path)),
         None,
     )
     assert template, f"no operation for {request.url.path}"
-    responses = paths[template][request.method.lower()]["responses"]
+    found: dict[str, Any] = paths[template][request.method.lower()]
+    return found
+
+
+def validate_request(request: httpx.Request) -> None:
+    """Raise unless the schema documents `request`'s operation, each of its query parameters
+    and its `Idempotency-Key` header, and its body matches the operation's schema exactly."""
+    op = operation(request)
+    documented = {(p["in"], p["name"].lower()) for p in op.get("parameters", [])}
+    for name in request.url.params:
+        assert ("query", name) in documented, f"{name} isn't a query parameter"
+    if "Idempotency-Key" in request.headers:
+        assert ("header", "idempotency-key") in documented, "Idempotency-Key isn't documented"
+    body = op.get("requestBody")
+    if body is None:
+        assert request.content == b""
+        return
+    ref = body["content"]["application/json"]["schema"]["$ref"]
+    validate(ref.rsplit("/", 1)[-1], json.loads(request.content))
+
+
+def validate_response(response: httpx.Response) -> None:
+    """Raise unless the schema documents `response`'s status for its operation, and its body
+    matches that status's schema exactly."""
+    request = response.request
+    responses = operation(request)["responses"]
     status = str(response.status_code)
-    assert status in responses, f"{request.method} {template} doesn't document {status}"
+    assert status in responses, f"{request.method} {request.url.path} doesn't document {status}"
     content = responses[status].get("content")
     if content is None:
         assert response.content == b""

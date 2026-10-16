@@ -178,6 +178,33 @@ def test_test_1_rejects_a_code_the_unit_already_has(api: httpx.Client) -> None:
         assert response.json() == {"code": ["Access code already exists for this unit."]}
 
 
+def test_test_1_rejects_an_expiry_in_the_past(api: httpx.Client) -> None:
+    existing = everything(api, "codes/")[0]
+    url = f"codes/{existing['uuid']}/"
+    past = {"expires_at": "2020-01-01T00:00:00Z"}
+    body = {"unit": existing["unit"], "code": "24680", **past}
+    for response in (
+        api.post("codes/", json=body),
+        api.put(url, json=body),
+        api.patch(url, json=past),
+    ):
+        assert response.status_code == 400
+        assert response.json() == {"expires_at": ["Expiry must be in the future."]}
+
+
+def test_test_1_accepts_a_codes_current_expiry_sent_back_after_it_passed(
+    api: httpx.Client,
+) -> None:
+    expired = next(
+        c for c in everything(api, "codes/") if c["expires_at"] == "2020-01-01T00:00:00Z"
+    )
+    url = f"codes/{expired['uuid']}/"
+    fields = {k: v for k, v in expired.items() if k != "uuid"}
+    assert api.put(url, json=fields).status_code == 200
+    assert api.patch(url, json={"expires_at": "2020-01-01T00:00:00+00:00"}).status_code == 200
+    assert api.patch(url, json={"expires_at": "2020-01-02T00:00:00Z"}).status_code == 400
+
+
 def test_test_1_requires_unit_and_code_to_create(api: httpx.Client) -> None:
     response = api.post("codes/", json={"name": "No code"})
     assert response.status_code == 400
@@ -191,3 +218,42 @@ def test_test_1_rate_limits_on_demand(api: httpx.Client) -> None:
     client = Yama(api_key="rate-limited", http_client=httpx.Client(transport=fake_transport()))
     with pytest.raises(RateLimitError):
         client._request("GET", "codes/")
+
+
+def test_test_1_replays_a_create_with_its_current_state(api: httpx.Client) -> None:
+    unit = everything(api, "units/")[0]["uuid"]
+    headers = {"Idempotency-Key": "replay-current"}
+    body = {"unit": unit, "code": "55555"}
+    code = api.post("codes/", json=body, headers=headers).json()
+    api.patch(f"codes/{code['uuid']}/", json={"name": "Renamed"})
+    again = api.post("codes/", json=body, headers=headers)
+    assert again.status_code == 201
+    assert again.headers["Idempotent-Replayed"] == "true"
+    assert again.json()["name"] == "Renamed"
+
+
+def test_test_1_replays_a_rejected_create(api: httpx.Client) -> None:
+    headers = {"Idempotency-Key": "replay-400"}
+    first = api.post("codes/", json={"code": "1"}, headers=headers)
+    again = api.post("codes/", json={"code": "1"}, headers=headers)
+    assert (first.status_code, again.status_code) == (400, 400)
+    assert first.json() == again.json()
+
+
+def test_test_1_rejects_a_reused_idempotency_key_with_a_different_body(api: httpx.Client) -> None:
+    unit = everything(api, "units/")[0]["uuid"]
+    headers = {"Idempotency-Key": "reused"}
+    assert api.post("codes/", json={"unit": unit, "code": "55555"}, headers=headers).is_success
+    response = api.post("codes/", json={"unit": unit, "code": "55556"}, headers=headers)
+    assert response.status_code == 422
+    assert "Idempotency-Key" in response.json()["detail"]
+
+
+def test_test_1_answers_410_when_a_replayed_create_was_deleted(api: httpx.Client) -> None:
+    unit = everything(api, "units/")[0]["uuid"]
+    headers = {"Idempotency-Key": "gone"}
+    body = {"unit": unit, "code": "55555"}
+    code = api.post("codes/", json=body, headers=headers).json()
+    assert api.delete(f"codes/{code['uuid']}/").status_code == 204
+    response = api.post("codes/", json=body, headers=headers)
+    assert response.status_code == 410

@@ -11,10 +11,12 @@ from yama import (
     AuthenticationError,
     BadRequestError,
     ConflictError,
+    GoneError,
     NotFoundError,
     PermissionDeniedError,
     RateLimitError,
     ServerError,
+    UnprocessableEntityError,
     Yama,
     YamaError,
 )
@@ -29,6 +31,9 @@ from yama import (
         (404, NotFoundError),
         (405, APIStatusError),
         (409, ConflictError),
+        (410, GoneError),
+        (415, APIStatusError),
+        (422, UnprocessableEntityError),
         (429, RateLimitError),
         (500, ServerError),
         (503, ServerError),
@@ -128,6 +133,11 @@ def test_err_4_raises_type_or_value_error_for_invalid_arguments(
         Yama(**{"api_key": "k", **kwargs})  # type: ignore[arg-type]
 
 
+def keyed(error: YamaError) -> YamaError:
+    error.idempotency_key = "job-17"
+    return error
+
+
 @pytest.mark.parametrize(
     "error",
     [
@@ -139,6 +149,8 @@ def test_err_4_raises_type_or_value_error_for_invalid_arguments(
         BadRequestError(400, "code: Taken.", {"code": ["Taken."]}, "v2", "POST", "/api/v2/x/"),
         RateLimitError(429, "Slow down.", {}, "v2", "GET", "/api/v2/x/", retry_after=12),
         ServerError(502, "Bad Gateway", "<html></html>", None, "GET", "/api/v2/x/"),
+        keyed(ConflictError(409, "In progress.", {}, "v2", "POST", "/api/v2/codes/")),
+        keyed(APITimeoutError("Request timed out: ReadTimeout")),
     ],
 )
 def test_err_5_survives_a_pickle_round_trip(error: YamaError) -> None:
