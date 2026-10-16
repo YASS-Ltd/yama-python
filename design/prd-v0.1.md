@@ -82,7 +82,7 @@ Written in [EARS](https://alistairmavin.com/ears/) form: each is one testable se
 
 - **PAG-1** When the caller iterates a list, the client shall yield every item on every page, following each `next` URL as given until it is null.
 - **PAG-2** The client shall send no request for a list until the caller starts iterating it.
-- **PAG-5** When the caller iterates the same list again, the client shall fetch it afresh from the first page.
+- **PAG-5** Each call to a list method shall return a new, single-use iterator that starts from the first page; once it's exhausted, it yields nothing more and sends no further requests.
 
 ### Call log (CALL)
 

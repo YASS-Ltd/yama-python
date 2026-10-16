@@ -10,7 +10,7 @@ Anything not listed here is private. The whole package should stay a few hundred
 src/yama/
   __init__.py      # re-exports everything public below, plus __version__
   _client.py       # Yama, DEFAULT_BASE_URL
-  _pagination.py   # Paginator
+  _pagination.py   # the paging generator (private)
   _resources.py    # one small class per resource
   _errors.py       # exception classes
   models.py        # Pydantic models and enums (public module)
@@ -63,31 +63,26 @@ Paths are relative to `/api/v2/`. `uuid` parameters accept `UUID | str`. Filters
 | Call | HTTP | Returns |
 |---|---|---|
 | `api_key.get()` | `GET api-key/` | `ApiKeyDetails` |
-| `buildings.list()` | `GET buildings/` | `Paginator[Building]` |
+| `buildings.list()` | `GET buildings/` | `Iterator[Building]` |
 | `buildings.get(uuid)` | `GET buildings/{uuid}/` | `Building` |
-| `units.list(*, building, door_digit, search)` | `GET units/` | `Paginator[Unit]` |
+| `units.list(*, building, door_digit, search)` | `GET units/` | `Iterator[Unit]` |
 | `units.get(uuid)` | `GET units/{uuid}/` | `Unit` |
-| `contacts.list(*, unit, number, menu_digit)` | `GET contacts/` | `Paginator[Contact]` |
+| `contacts.list(*, unit, number, menu_digit)` | `GET contacts/` | `Iterator[Contact]` |
 | `contacts.get(uuid)` | `GET contacts/{uuid}/` | `Contact` |
-| `codes.list(*, unit, code, name, search)` | `GET codes/` | `Paginator[AccessCode]` |
+| `codes.list(*, unit, code, name, search)` | `GET codes/` | `Iterator[AccessCode]` |
 | `codes.get(uuid)` | `GET codes/{uuid}/` | `AccessCode` |
 | `codes.create(data: AccessCodeCreate, *, idempotency_key: str \| None)` | `POST codes/` | `AccessCode` |
 | `codes.replace(uuid, data: AccessCodeCreate)` | `PUT codes/{uuid}/` | `AccessCode` |
 | `codes.update(uuid, data: AccessCodeUpdate)` | `PATCH codes/{uuid}/` | `AccessCode` |
 | `codes.delete(uuid)` | `DELETE codes/{uuid}/` | `None` |
-| `calls.list(*, start: date \| None, end: date \| None, unit, building, result)` | `GET calls/` | `Paginator[CallLogEntry]` |
+| `calls.list(*, start: date \| None, end: date \| None, unit, building, result)` | `GET calls/` | `Iterator[CallLogEntry]` |
 | `calls.get(uuid)` | `GET calls/{uuid}/` | `CallLogEntry` |
 
-Lists take no `limit` or `offset`: the paginator requests pages itself and follows `next` (PAG-1).
+Lists take no `limit` or `offset`: the iterator requests pages itself and follows `next` (PAG-1).
 
 ## Pagination
 
-```python
-class Paginator(Generic[T]):        # returned by every list()
-    def __iter__(self) -> Iterator[T]
-```
-
-Iterating yields items, never pages (PAG-1). Pages are parsed with a private `_Page` model and never exposed.
+Every `list()` returns a plain `Iterator[T]` (a generator) that yields items, never pages, fetching each page as iteration reaches it (PAG-1, PAG-2). It's single-use, like any Python iterator (PAG-5): to use the items twice, call `list(...)` on it. Pages are parsed with a private `_Page` model and never exposed.
 
 ## Testing (`yama.testing`)
 
