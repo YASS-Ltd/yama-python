@@ -15,8 +15,6 @@ for unit in client.units.list():
 first_building = next(client.buildings.list())  # fetches one page only
 ```
 
-An iterator is single-use, like any Python iterator. To go over the items twice, make a list: `units = list(client.units.list())`.
-
 ## Filters
 
 Filters are keyword arguments with the API's names. Leave one out to not filter by it. UUIDs can be `UUID` objects or strings, and enum filters take the enum or its string value.

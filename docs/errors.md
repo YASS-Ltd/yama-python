@@ -47,7 +47,7 @@ The client retries a request, up to `max_retries` times (2 by default), only whe
 - **A 5xx, a timeout or a broken connection**, for every call, creates included (see [Creates that are safe to repeat](#creates-that-are-safe-to-repeat)).
 - **Never** a 4xx other than 429, which would fail again. A 409 on a create is retried, since it means the first attempt is still running.
 
-It waits as long as `Retry-After` says, or else an increasing delay. When `Retry-After` asks for more than 60 seconds, it raises `RateLimitError` at once instead of blocking, and you choose when to try again. A retried delete that gets a 404 counts as done, since an earlier attempt may have deleted it. Each retry is logged at INFO (see [Logging](logging.md)).
+It waits as long as `Retry-After` says, or else a random, increasing delay of up to 8 seconds. When `Retry-After` asks for more than 60 seconds, it raises `RateLimitError` at once instead of blocking, and you choose when to try again. A retried delete that gets a 404 counts as done, since an earlier attempt may have deleted it. Each retry is logged at INFO (see [Logging](logging.md)).
 
 ## Creates that are safe to repeat
 
