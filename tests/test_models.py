@@ -223,6 +223,15 @@ def test_mod_4_create_requires_unit_and_code() -> None:
         AccessCodeCreate(unit=UNIT)  # type: ignore[call-arg]
 
 
+def test_mod_4_update_rejects_null_where_the_schema_does() -> None:
+    for field in ("unit", "code"):
+        with pytest.raises(ValidationError):
+            AccessCodeUpdate(**{field: None})
+    cleared = AccessCodeUpdate(name=None, expires_at=None)
+    assert cleared.model_dump(exclude_unset=True) == {"name": None, "expires_at": None}
+    assert AccessCodeUpdate().model_dump(exclude_unset=True) == {}
+
+
 def test_mod_5_request_models_leave_value_rules_to_the_api() -> None:
     code = AccessCodeCreate(unit=UNIT, code="12", name="x" * 1000)
     assert code.code == "12"

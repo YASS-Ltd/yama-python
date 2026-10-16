@@ -13,7 +13,7 @@ from enum import Enum
 from typing import Annotated
 from uuid import UUID
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_validator
 
 __all__ = [
     "AccessCode",
@@ -252,9 +252,18 @@ class AccessCodeCreate(_Request):
 
 
 class AccessCodeUpdate(_Request):
-    """Changes to an access code: only the fields you set are sent, None included."""
+    """Changes to an access code: only the fields you set are sent. Setting `name` or
+    `expires_at` to None clears it; `code` and `unit` can't be cleared."""
 
     unit: UUID | None = None
     code: str | None = None
     name: str | None = None
     expires_at: AwareDatetime | None = None
+
+    @field_validator("unit", "code")
+    @classmethod
+    def _not_null(cls, value: object) -> object:
+        """The API doesn't take null for these (MOD-4); leaving them out is fine."""
+        if value is None:
+            raise ValueError("can't be None; leave it out to keep the current value")
+        return value

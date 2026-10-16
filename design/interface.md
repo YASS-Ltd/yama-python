@@ -105,7 +105,7 @@ Use: `Yama(api_key="test", http_client=httpx.Client(transport=fake_transport()))
 ## Models (`yama.models`)
 
 - **Responses**, mirroring the schema's components field for field: `ApiKeyDetails` (the schema's `ApiKey`; it describes the key and never holds the key itself), with `ApiKeyPermissions` and `ApiKeyUnitAccess`, `Building`, `Unit`, `Contact`, `AccessCode`, `CallLogEntry`, `CallLogStep`. Frozen, with `extra="allow"` (MOD-2).
-- **Requests:** `AccessCodeCreate` (`unit: UUID`, `code: str`, `name: str | None = None`, `expires_at: AwareDatetime | None = None`) and `AccessCodeUpdate` (the same fields, all optional). `extra="forbid"` (MOD-4).
+- **Requests:** `AccessCodeCreate` (`unit: UUID`, `code: str`, `name: str | None = None`, `expires_at: AwareDatetime | None = None`) and `AccessCodeUpdate` (the same fields, all optional; an explicit None for `unit` or `code` is rejected, as the schema doesn't allow null there). `extra="forbid"` (MOD-4).
 - **Enums**, as `str` enums whose `str()` and f-string give the value (`str(CallResult.REJECTED) == "rejected"`, MOD-6): `CallResult`, `CallStepKind`, `CodeAttemptResult`, `DialStatus`, `DoorDigit`, `AccessLevel` (`none`/`read`/`write`) and `UnitAccessType`. Response fields are typed `Enum | str` with left-to-right union mode (MOD-3). Members are the values upper-cased, with `-` as `_` (`DialStatus.NO_ANSWER`); `DoorDigit` members are `ZERO` to `NINE`. Compare with `==` (`call.result == CallResult.REJECTED`), which works for both forms without type narrowing.
 
 ## Errors

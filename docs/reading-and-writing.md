@@ -97,7 +97,7 @@ A create is safe to repeat with the same idempotency key; see [Creates that are 
 
 ## Changing
 
-`codes.update()` takes an [`AccessCodeUpdate`][yama.models.AccessCodeUpdate] and changes only the fields you set, so setting one to `None` clears it:
+`codes.update()` takes an [`AccessCodeUpdate`][yama.models.AccessCodeUpdate] and changes only the fields you set. Setting `name` or `expires_at` to `None` clears it; `code` and `unit` can't be cleared.
 
 ```python
 from yama import AccessCodeUpdate

@@ -213,8 +213,9 @@ class Codes(_Resource):
         return parse(AccessCode, self._client._request("PUT", f"codes/{_uuid(uuid)}/", json=body))
 
     def update(self, uuid: UUID | str, data: AccessCodeUpdate) -> AccessCode:
-        """Change the fields of an access code set in `data`; set one to None to clear it,
-        such as `AccessCodeUpdate(expires_at=None)` for a code that never expires."""
+        """Change the fields of an access code set in `data`. Set `name` or `expires_at` to
+        None to clear it, such as `AccessCodeUpdate(expires_at=None)` for a code that never
+        expires."""
         body = _body(data, AccessCodeUpdate)
         path = f"codes/{_uuid(uuid)}/"
         return parse(AccessCode, self._client._request("PATCH", path, json=body))

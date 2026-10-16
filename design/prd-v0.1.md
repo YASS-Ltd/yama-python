@@ -109,7 +109,7 @@ Written in [EARS](https://alistairmavin.com/ears/) form: each is one testable se
 - **MOD-1** The client shall return responses as Pydantic models, with UUIDs as `UUID` and datetimes timezone-aware.
 - **MOD-2** When a response contains a field the client doesn't define, the client shall keep it readable on the model.
 - **MOD-3** When a response contains an enum value the client doesn't know, the client shall return it as a plain string.
-- **MOD-4** If a request model is given a field it doesn't define, or a datetime without a timezone, then building the model shall raise `pydantic.ValidationError`.
+- **MOD-4** If a request model is given a field it doesn't define, a datetime without a timezone, or null for a field the schema doesn't allow null, then building the model shall raise `pydantic.ValidationError`.
 - **MOD-5** The client shall check only types and required fields in request models, leaving value rules such as lengths to the API.
 - **MOD-6** The client's enum members shall give their value from `str()` and in f-strings, as the plain strings of MOD-3 do.
 
