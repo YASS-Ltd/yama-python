@@ -10,8 +10,8 @@
 </p>
 
 <p align="center">
-  <a href="https://pypi.org/project/yama/"><img src="https://img.shields.io/pypi/v/yama?style=flat-square" alt="PyPI"></a>
-  <a href="https://pypi.org/project/yama/"><img src="https://img.shields.io/pypi/pyversions/yama?style=flat-square" alt="Python versions"></a>
+  <a href="https://pypi.org/project/yama-client/"><img src="https://img.shields.io/pypi/v/yama-client?style=flat-square" alt="PyPI"></a>
+  <a href="https://pypi.org/project/yama-client/"><img src="https://img.shields.io/pypi/pyversions/yama-client?style=flat-square" alt="Python versions"></a>
   <a href="https://github.com/YASS-Ltd/yama-python/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/YASS-Ltd/yama-python/ci.yml?branch=main&style=flat-square&label=CI" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/licence-MIT-21212B?style=flat-square" alt="MIT licence"></a>
 </p>
@@ -30,7 +30,7 @@ Manage a building's access codes and read its call log from Python. The client h
 ## Install
 
 ```console
-uv add yama        # or: pip install yama
+uv add yama-client  # or: pip install yama-client
 ```
 
 <!-- --8<-- [start:quick-start] -->

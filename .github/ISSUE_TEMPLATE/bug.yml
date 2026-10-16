@@ -15,4 +15,4 @@ body:
     id: versions
     attributes:
       label: Versions
-      placeholder: yama 0.1.0, Python 3.13
+      placeholder: yama-client 0.1.0, Python 3.13

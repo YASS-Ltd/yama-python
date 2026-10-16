@@ -1835,7 +1835,7 @@ wheels = [
 ]
 
 [[package]]
-name = "yama"
+name = "yama-client"
 version = "0.0.0"
 source = { editable = "." }
 dependencies = [

@@ -40,7 +40,7 @@ from yama.models import (
     UnitAccessType,
 )
 
-__version__ = version("yama")
+__version__ = version("yama-client")
 
 logging.getLogger("yama").addHandler(logging.NullHandler())
 
