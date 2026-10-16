@@ -40,7 +40,8 @@ from yama._resources import ApiKeyResource, Buildings, Calls, Codes, Contacts, U
 DEFAULT_BASE_URL = "https://app.yamasystems.com"
 """Where the client sends requests unless `base_url` or `YAMA_API_BASE_URL` says otherwise."""
 
-_USER_AGENT = f"yama-python/{version('yama')} python/{sys.version_info[0]}.{sys.version_info[1]}"
+_PYTHON = f"{sys.version_info[0]}.{sys.version_info[1]}"
+_USER_AGENT = f"yama-python/{version('yama-client')} python/{_PYTHON}"
 _MAX_RETRY_AFTER = 60
 _ERRORS: dict[int, type[APIStatusError]] = {
     400: BadRequestError,

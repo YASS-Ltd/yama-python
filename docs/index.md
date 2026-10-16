@@ -7,7 +7,7 @@ This site covers the Python client. The REST API itself is documented at <https:
 ## Install
 
 ```console
-uv add yama        # or: pip install yama
+uv add yama-client  # or: pip install yama-client
 ```
 
 It needs Python 3.10 or newer, and depends only on httpx and Pydantic.

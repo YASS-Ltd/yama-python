@@ -28,7 +28,7 @@ The API behaviour the client must handle is written down once, as requirements i
 
 ## Settled choices
 
-- Its own public repo (`YASS-Ltd/yama-python`), with work tracked in GitHub Issues and Projects. Versioned with SemVer and published to PyPI as `yama`, independently of the app's CalVer releases.
+- Its own public repo (`YASS-Ltd/yama-python`), with work tracked in GitHub Issues and Projects. Versioned with SemVer and published to PyPI as `yama-client` (imported as `yama`), independently of the app's CalVer releases.
 - Product choices (licence, Pydantic models, supported Python versions) are in the PRD's Settled Choices; behaviour is in its requirements.
 
 ## Development Workflow

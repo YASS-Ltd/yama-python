@@ -60,7 +60,7 @@ def wheel(tmp_path_factory: pytest.TempPathFactory) -> Path:
     out = tmp_path_factory.mktemp("dist")
     root = Path(__file__).parent.parent
     subprocess.run(["uv", "build", "--wheel", "-q", "-o", str(out), str(root)], check=True)
-    return next(out.glob("yama-*.whl"))
+    return next(out.glob("yama_client-*.whl"))
 
 
 def in_clean_env(wheel: Path, cwd: Path, *command: str) -> subprocess.CompletedProcess[str]:
@@ -76,6 +76,7 @@ def test_pkg_1_wheel_needs_python_3_10_and_only_httpx_and_pydantic(wheel: Path) 
     with zipfile.ZipFile(wheel) as zf:
         name = next(n for n in zf.namelist() if n.endswith(".dist-info/METADATA"))
         metadata = email.message_from_bytes(zf.read(name))
+    assert metadata["Name"] == "yama-client"
     assert metadata["Requires-Python"] == ">=3.10"
     requires = [re.split(r"[^\w.-]", r)[0] for r in metadata.get_all("Requires-Dist", [])]
     assert sorted(requires) == ["httpx", "pydantic"]

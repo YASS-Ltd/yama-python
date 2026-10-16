@@ -131,7 +131,7 @@ Written in [EARS](https://alistairmavin.com/ears/) form: each is one testable se
 
 ### Delivery (DEL)
 
-- **DEL-1** The package shall be published to PyPI as `yama` through trusted publishing.
+- **DEL-1** The package shall be published to PyPI as `yama-client`, imported as `yama`, through trusted publishing.
 - **DEL-2** The documentation site shall cover install, configuration, pagination, errors, retries, logging, testing with the fake API, using the client in web apps and background jobs (one client per process, short timeouts in requests, a stable `idempotency_key` where a job may re-run a create), and versioning, with a reference generated from docstrings.
 - **DEL-3** The README quick start shall run as written against the in-memory fake API.
 
