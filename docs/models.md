@@ -1,23 +1,5 @@
 # Models
 
-## What you get back
-
-Every response is a frozen [Pydantic](https://docs.pydantic.dev/) model with the API's field names: UUIDs are `UUID`, and every time is a timezone-aware `datetime` in UTC.
-
-```python
-from yama import Yama
-
-client = Yama()
-code = next(client.codes.list())
-print(code.uuid, code.unit, code.code, code.name, code.expires_at)
-print(code.model_dump(mode="json"))  # a dict, ready for JSON
-```
-
-The API adds fields and enum values over time without a new version, and the client is ready for them:
-
-- A field the client doesn't know yet is still there: read it as an attribute, or from `code.model_extra`.
-- An enum value the client doesn't know yet comes back as a plain string. Compare with `==`, which works for both: `call.result == CallResult.REJECTED`. Enum members format as their value, so `str()` and f-strings give `"rejected"` either way.
-
 ## What you send
 
 Creates and changes take request models: [`AccessCodeCreate`][yama.models.AccessCodeCreate] for `codes.create()` and `codes.replace()`, and [`AccessCodeUpdate`][yama.models.AccessCodeUpdate] for `codes.update()`. They reject unknown fields and datetimes without a time zone when you build them, before anything is sent, with `pydantic.ValidationError`. Rules about values, such as how many digits a code has, are left to the API.
@@ -25,8 +7,9 @@ Creates and changes take request models: [`AccessCodeCreate`][yama.models.Access
 ```python
 from datetime import datetime, timezone
 
-from yama import AccessCodeCreate, AccessCodeUpdate
+from yama import AccessCodeCreate, AccessCodeUpdate, Yama
 
+client = Yama()
 unit = next(client.units.list())
 expires = datetime(2027, 1, 1, tzinfo=timezone.utc)
 code = client.codes.create(
@@ -39,6 +22,21 @@ code = client.codes.create(
 ```python
 code = client.codes.update(code.uuid, AccessCodeUpdate(expires_at=None))  # never expires
 ```
+
+## What you get back
+
+Every response is a frozen [Pydantic](https://docs.pydantic.dev/) model with the API's field names: UUIDs are `UUID`, and every time is a timezone-aware `datetime` in UTC.
+
+```python
+code = next(client.codes.list())
+print(code.uuid, code.unit, code.code, code.name, code.expires_at)
+print(code.model_dump(mode="json"))  # a dict, ready for JSON
+```
+
+The API adds fields and enum values over time without a new version, and the client is ready for them:
+
+- A field the client doesn't know yet is still there: read it as an attribute, or from `code.model_extra`.
+- An enum value the client doesn't know yet comes back as a plain string. Compare with `==`, which works for both: `call.result == CallResult.REJECTED`. Enum members format as their value, so `str()` and f-strings give `"rejected"` either way.
 
 ## From a fetched code to a request
 
