@@ -70,7 +70,7 @@ Paths are relative to `/api/v2/`. `uuid` parameters accept `UUID | str`. Filters
 | `contacts.get(uuid)` | `GET contacts/{uuid}/` | `Contact` |
 | `codes.list(*, unit, code, name, search, page_size)` | `GET codes/` | `Paginator[AccessCode]` |
 | `codes.get(uuid)` | `GET codes/{uuid}/` | `AccessCode` |
-| `codes.create(data: AccessCodeCreate, *, idempotency_key)` | `POST codes/` | `AccessCode` |
+| `codes.create(data: AccessCodeCreate)` | `POST codes/` | `AccessCode` |
 | `codes.replace(uuid, data: AccessCodeCreate)` | `PUT codes/{uuid}/` | `AccessCode` |
 | `codes.update(uuid, data: AccessCodeUpdate)` | `PATCH codes/{uuid}/` | `AccessCode` |
 | `codes.delete(uuid)` | `DELETE codes/{uuid}/` | `None` |
@@ -79,7 +79,6 @@ Paths are relative to `/api/v2/`. `uuid` parameters accept `UUID | str`. Filters
 
 - `page_size: int | None` is sent as `limit` (1-500; the API defaults to 100). There is no `offset` argument: the paginator follows `next`.
 - `calls.list`: `start` and `end` are `datetime.date`s, sent as ISO dates, and go together: passing only one raises `ValueError` before any request. Without them the API returns the last 30 days. The paginator skips any call whose `uuid` it has already yielded, because new calls shift pages while you read.
-- `codes.create` sends an `Idempotency-Key` header: `idempotency_key: str | None` if given, otherwise a fresh `uuid4`, kept the same across retries of that call. Pass your own key to make a create safe to repeat across process restarts, such as one derived from a record in your system.
 - `codes.update` sends only the fields set on the model (`model_dump(exclude_unset=True)`), so `AccessCodeUpdate(expires_at=None)` clears the expiry and `AccessCodeUpdate(name="Cleaner")` leaves it alone.
 
 ## Pagination
@@ -104,6 +103,7 @@ Response models mirror the schema's components field for field: `ApiKey` (with `
 
 - **Responses** are frozen and keep unknown fields (`ConfigDict(extra="allow", frozen=True)`), so a field added within v2 is readable before the client knows about it.
 - **Requests** forbid unknown fields (`extra="forbid"`), catching typos before the API's 400 would. `AccessCodeCreate`: `unit: UUID`, `code: str`, `name: str | None = None`, `expires_at: AwareDatetime | None = None`. `AccessCodeUpdate`: the same fields, all optional.
+- **Known schema bug:** `ApiKey.expires_at` and `last_used_at` are `datetime | None`, although the schema marks them non-nullable; the API really returns `null`. A fix is filed upstream. Until it lands, the contract tests allow this one difference.
 - **Types:** `uuid` fields are `UUID`, datetimes are timezone-aware `datetime`s, and the dates the client sends are `date`s.
 - **Enums** are `str` enums, so members equal their string values: `CallResult`, `CallStepKind`, `CodeAttemptResult`, `DialStatus`, `DoorDigit`, `AccessLevel` (`none`/`read`/`write`) and `UnitAccessType`. Response fields are typed `Enum | str` with left-to-right union mode, so a value the client doesn't know arrives as a plain `str` rather than an error.
 
@@ -127,8 +127,8 @@ YamaError                       # base; also raised for client misconfiguration
 
 - Retried: 429, 5xx, and `httpx.TransportError`, up to `max_retries` times.
 - Wait: a 429's `Retry-After` when present. Otherwise exponential backoff with jitter, starting at 0.5 s and capped at 8 s. A `Retry-After` over 60 s isn't waited out: the client raises `RateLimitError` straight away.
-- A `409` on `codes.create` (the same key still in flight) is retried too.
-- Every method retries the same way, `codes.create` included, because its `Idempotency-Key` makes a repeated create return the first result instead of making a second code. This depends on the API's idempotency support (see the PRD); 0.1.0 doesn't ship without it.
+- `POST` (creating a code) is retried only on 429 and on connection errors raised before the request was sent (`httpx.ConnectError`, `httpx.ConnectTimeout`). After a 5xx or a read timeout the code may or may not exist, so the client raises, and the error's message says the code may have been created and how to check: `codes.list(unit=..., code=...)`. A retry couldn't make a duplicate, since codes are unique per unit, but it would turn an unknown outcome into a misleading 400 "already exists". The README documents the recovery.
+- When the API supports idempotency keys, `codes.create` will send one and retry like any other call. That's an additive change for a later minor release.
 - Waiting goes through `Yama._sleep` (default `time.sleep`), so tests replace it rather than sleep.
 
 ## Out of Scope for v0.1
