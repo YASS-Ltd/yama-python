@@ -24,7 +24,7 @@ from datetime import date
 from yama import Yama, AccessCodeCreate, AccessCodeUpdate
 
 with Yama() as client:  # api_key from YAMA_API_KEY
-    key = client.api_key.get()  # first call: what can this key do?
+    key_details = client.api_key.get()  # first call: what can this key do?
 
     for unit in client.units.list(building=building_uuid):
         ...
