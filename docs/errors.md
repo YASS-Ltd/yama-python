@@ -68,4 +68,4 @@ Things to know about keys:
 - **Same key, same data.** A key reused with different data raises `UnprocessableEntityError`. A time sent with a different UTC offset counts as different data, so work out times such as `expires_at` once.
 - **The API remembers a key for 24 hours**, along with the answer it gave. A repeat within that time gets the same answer: the code, or the same 400. To send corrected data after a `BadRequestError`, use a new key.
 - **`GoneError`** means the create with that key happened, but the code has since been deleted. Don't create it again with that key.
-- When your own code may repeat a create, such as a job that re-runs or a form submitted twice, pass a stable `idempotency_key` of your own. See [Web apps and background jobs](web-apps-and-jobs.md#creates-in-jobs-that-may-re-run).
+- When your own code may repeat a create, such as a job that re-runs or a form submitted twice, pass a stable `idempotency_key` of your own: one derived from your own record, or one generated when you render the form and carried in a hidden field.

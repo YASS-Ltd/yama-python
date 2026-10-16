@@ -61,14 +61,3 @@ asyncio.run(dashboard())
 ```
 
 Cancelling the awaiting task doesn't stop a call already running in its thread: it carries on, within its timeout and retries, and its result is dropped. That matters for a create, which may still happen. Pass an `idempotency_key` you can repeat (see [Creates that are safe to repeat](errors.md#creates-that-are-safe-to-repeat)).
-
-## Creates in jobs that may re-run
-
-A job queue may run a task twice: a retry after a timeout, a worker that died part-way, or at-least-once delivery. Give such a create a stable `idempotency_key`, derived from your own record, so a repeat within 24 hours returns the code made the first time instead of making a second one (see [Creates that are safe to repeat](errors.md#creates-that-are-safe-to-repeat)):
-
-- **Send the same data with the same key.** Work out anything that changes from run to run, such as an `expires_at` computed from the current time, once, outside the part that re-runs, and pass it in.
-- **After a `BadRequestError`, use a new key.** The API replays a 400 for the key that got it, for 24 hours, so a corrected create needs a key of its own.
-
-## Creates from web forms
-
-A form can be submitted twice, by a double click or a retried request. Generate a key when you render the form and carry it in a hidden field, so a second submit of the same form returns the same code. When the API answers 400, show the form again with a new key, since the corrected submit is different data.
