@@ -18,7 +18,6 @@ nav:
       - Web apps and background jobs: web-apps-and-jobs.md
       - Versioning: versioning.md
   - Reference: reference.md
-  - Changelog: https://github.com/YASS-Ltd/yama-python/releases
 
 theme:
   name: material
