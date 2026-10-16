@@ -21,7 +21,9 @@ print(key_details.permissions.codes)  # none, read or write
 print(key_details.unit_access.type)  # all, buildings or units
 ```
 
-## Options
+## Client options
+
+`Yama()` takes these arguments, all optional:
 
 | Argument | Default | Meaning |
 |---|---|---|
