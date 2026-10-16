@@ -2,7 +2,7 @@
 
 ## What a call raises
 
-A failed call raises a [`YamaError`][yama.YamaError] subclass, never an httpx or Pydantic error. Invalid arguments, such as a naive datetime or a malformed UUID, raise `TypeError` or `ValueError` before anything is sent. Building a request model with an unknown field, a datetime without a time zone, or None for a field that can't be cleared raises `pydantic.ValidationError`, which is a `ValueError`.
+A failed call raises a [`YamaError`][yama.YamaError] subclass, never an httpx or Pydantic error. Invalid arguments, such as a naive datetime or a malformed UUID, raise `TypeError` or `ValueError` before anything is sent. Building a request model with an unknown field, a datetime without a time zone, None for a field that can't be cleared, or a value the schema doesn't allow, such as a code that isn't 3 to 15 digits, raises `pydantic.ValidationError`, which is a `ValueError`.
 
 | Error | When | Try again later? |
 |---|---|---|

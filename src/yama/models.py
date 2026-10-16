@@ -4,7 +4,8 @@ Response models mirror the API's schema field for field. They're frozen, keep fi
 client doesn't know (read them as attributes, or from `model_extra`), and give an enum value
 the client doesn't know as a plain string, so compare with `==`. Enum members format as their
 value, so `str()` and f-strings give the same text either way. Request models reject unknown
-fields and datetimes without a time zone, and leave value rules, such as lengths, to the API.
+fields, datetimes without a time zone, and values the schema doesn't allow, such as a code that
+isn't 3 to 15 digits. Rules that depend on the API's data or clock are left to the API.
 """
 
 from __future__ import annotations
@@ -13,7 +14,7 @@ from enum import Enum
 from typing import Annotated
 from uuid import UUID
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_validator
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, StringConstraints, field_validator
 
 __all__ = [
     "AccessCode",
@@ -136,6 +137,13 @@ class _Request(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+# The schema's value rules for request fields (MOD-5). `[0-9]`, unlike `\d`, takes only ASCII.
+_CODE_PATTERN = r"^[0-9]{3,15}$"
+_NAME_MAX = 255
+_Code = Annotated[str, StringConstraints(pattern=_CODE_PATTERN, min_length=3, max_length=15)]
+_Name = Annotated[str, StringConstraints(max_length=_NAME_MAX)]
+
+
 class ApiKeyPermissions(_Response):
     """An API key's access level for each resource."""
 
@@ -240,24 +248,26 @@ class CallLogEntry(_Response):
 class AccessCodeCreate(_Request):
     """A new access code, or the whole of one being replaced.
 
-    `name` is optional. Leave `expires_at` out for a code that never expires; when replacing,
-    leaving it out keeps the current expiry and None clears it. The API doesn't say what
-    leaving `name` out does on a replace, so pass the name the code should have.
+    `code` is 3 to 15 digits, and `name`, which is optional, is at most 255 characters. Leave
+    `expires_at` out for a code that never expires; when replacing, leaving it out keeps the
+    current expiry and None clears it. The API doesn't say what leaving `name` out does on a
+    replace, so pass the name the code should have.
     """
 
     unit: UUID
-    code: str
-    name: str | None = None
+    code: _Code
+    name: _Name | None = None
     expires_at: AwareDatetime | None = None
 
 
 class AccessCodeUpdate(_Request):
-    """Changes to an access code: only the fields you set are sent. Setting `name` or
-    `expires_at` to None clears it; `code` and `unit` can't be cleared."""
+    """Changes to an access code: only the fields you set are sent, with the same rules as in
+    `AccessCodeCreate`. Setting `name` or `expires_at` to None clears it; `code` and `unit`
+    can't be cleared."""
 
     unit: UUID | None = None
-    code: str | None = None
-    name: str | None = None
+    code: _Code | None = None
+    name: _Name | None = None
     expires_at: AwareDatetime | None = None
 
     @field_validator("unit", "code")

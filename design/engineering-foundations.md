@@ -56,7 +56,7 @@ The rules for what the client exposes and what it hides. They follow the convent
 
 ### Compatibility
 
-8. **Tolerant reader, strict writer.** Responses accept unknown fields and pass unknown enum values through as strings, since v2 grows additively. Requests reject unknown fields locally. The client checks types and required fields, but leaves value rules (lengths, formats, uniqueness) to the API, so a rule the API relaxes doesn't need a client release.
+8. **Tolerant reader, strict writer.** Responses accept unknown fields and pass unknown enum values through as strings, since v2 grows additively. Requests reject unknown fields locally, and request models enforce the value rules the schema states (lengths, patterns, nullability); a contract test keeps them in step with the vendored schema, so the schema-drift job flags a changed rule. Rules that depend on the API's data or clock, such as uniqueness or an expiry in the future, are left to the API.
 9. **Deprecate before removing.** Before 1.0, a minor release may break the interface, and the changelog says how to migrate. From 1.0, a removal or rename first warns with `DeprecationWarning` for at least one minor release.
 10. **Wide dependency ranges.** Runtime dependencies are httpx and Pydantic only, each with the lowest floor the code allows and no upper bound. Every extra or pinned dependency is a version conflict waiting in someone else's project.
 

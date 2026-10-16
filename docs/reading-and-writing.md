@@ -81,7 +81,7 @@ If you keep your own copy of the call log, it changes after the fact:
 
 ## Creating
 
-`codes.create()` takes an [`AccessCodeCreate`][yama.models.AccessCodeCreate]. Request models check fields and types as you build them (see [What a call raises](errors.md#what-a-call-raises)), and leave rules about values, such as how many digits a code has, to the API.
+`codes.create()` takes an [`AccessCodeCreate`][yama.models.AccessCodeCreate]. Request models check fields, types and the values the schema allows as you build them: `code` is 3 to 15 digits, and `name` at most 255 characters (see [What a call raises](errors.md#what-a-call-raises)). Rules that depend on the API's data, such as a code being unique on its unit or `expires_at` being in the future, are checked by the API, which answers with `BadRequestError`.
 
 ```python
 from datetime import datetime, timezone

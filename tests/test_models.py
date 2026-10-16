@@ -6,7 +6,7 @@ from uuid import UUID
 import pytest
 from pydantic import BaseModel, ValidationError
 
-from tests.schema import validate
+from tests.schema import schema_component, validate
 from yama.models import (
     AccessCode,
     AccessCodeCreate,
@@ -232,10 +232,63 @@ def test_mod_4_update_rejects_null_where_the_schema_does() -> None:
     assert AccessCodeUpdate().model_dump(exclude_unset=True) == {}
 
 
-def test_mod_5_request_models_leave_value_rules_to_the_api() -> None:
-    code = AccessCodeCreate(unit=UNIT, code="12", name="x" * 1000)
-    assert code.code == "12"
-    assert AccessCodeUpdate(code="not digits").code == "not digits"
+@pytest.mark.parametrize(
+    "bad",
+    [
+        {"code": "12"},
+        {"code": "1234567890123456"},
+        {"code": "12a4"},
+        {"code": " 1234"},
+        {"code": "1234\n"},
+        {"code": "١٢٣"},  # Arabic-Indic digits
+        {"code": "²²²"},  # superscripts
+        {"name": "x" * 256},
+    ],
+)
+def test_mod_5_request_models_enforce_the_schemas_value_rules(bad: dict[str, str]) -> None:
+    with pytest.raises(ValidationError):
+        AccessCodeCreate(**{"unit": UNIT, "code": "4321"} | bad)
+    with pytest.raises(ValidationError):
+        AccessCodeUpdate(**bad)
+
+
+def test_mod_5_request_models_accept_values_within_the_rules() -> None:
+    for code in ("000", "123456789012345"):
+        assert AccessCodeCreate(unit=UNIT, code=code, name="x" * 255).code == code
+        assert AccessCodeUpdate(code=code).code == code
+
+
+def test_mod_5_response_models_keep_values_the_rules_reject() -> None:
+    old = AccessCode.model_validate(SAMPLES[4][2] | {"code": "12", "name": "x" * 300})
+    assert (old.code, len(old.name or "")) == ("12", 300)
+
+
+REQUESTS = [(AccessCodeCreate, "AccessCodeRequest"), (AccessCodeUpdate, "PatchedAccessCodeRequest")]
+RULES = ("pattern", "minLength", "maxLength")
+
+
+def _rules(prop: dict[str, Any]) -> dict[str, Any]:
+    """A property's value rules, from it or from its non-null `anyOf` branch."""
+    return {k: v for branch in prop.get("anyOf", [prop]) for k, v in branch.items() if k in RULES}
+
+
+@pytest.mark.parametrize(("model", "component"), REQUESTS)
+def test_mod_5_request_models_have_the_schemas_value_rules(
+    model: type[BaseModel], component: str
+) -> None:
+    spec = schema_component(component)
+    ours = model.model_json_schema()
+    assert ours["properties"].keys() == spec["properties"].keys()
+    assert set(ours.get("required", [])) == set(spec.get("required", []))
+    minimal = {"unit": UNIT, "code": "4321"} if "unit" in ours.get("required", []) else {}
+    for name, prop in spec["properties"].items():
+        assert _rules(ours["properties"][name]) == _rules(prop), name
+        try:
+            model(**minimal | {name: None})
+            nullable = True
+        except ValidationError:
+            nullable = False
+        assert nullable == prop.get("nullable", False), name
 
 
 def test_mod_5_request_models_check_types() -> None:
