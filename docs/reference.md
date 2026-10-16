@@ -73,6 +73,7 @@ The client's attributes, such as `client.codes`; you don't create these yourself
       show_root_heading: false
       show_root_toc_entry: false
       members_order: source
+      show_bases: false
 
 ## Errors
 
