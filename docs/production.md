@@ -60,11 +60,6 @@ async def dashboard() -> None:
 asyncio.run(dashboard())
 ```
 
-Frameworks have their own ways to do the same:
-
-- **FastAPI and Starlette** run an endpoint declared with plain `def`, not `async def`, in a thread pool, so it can call the client directly.
-- **Django** async views can wrap a call in `asgiref.sync.sync_to_async`. Pass `thread_sensitive=False`, or calls queue behind each other on Django's one shared thread.
-
 Cancelling the awaiting task doesn't stop a call already running in its thread: it carries on, within its timeout and retries, and its result is dropped. That matters for a create, which may still happen. Pass an `idempotency_key` you can repeat (see [Creates that are safe to repeat](errors.md#creates-that-are-safe-to-repeat)).
 
 ## Creates in jobs that may re-run
