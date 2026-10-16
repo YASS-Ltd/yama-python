@@ -33,7 +33,7 @@ A UUID filter that isn't a valid UUID raises `ValueError` without sending a requ
 
 ## The call log
 
-`calls.list()` takes a range of timezone-aware datetimes: it yields calls with `start <= started_at < end`, newest first. The range is half-open, so back-to-back ranges never miss or repeat a call, and one local day runs from its midnight to the next, in any time zone:
+`calls.list()` takes an optional `start` and `end`, as timezone-aware datetimes, and yields the calls that started at or after `start` and before `end`, newest first. Because a call at exactly `end` is left out, one range can end where the next begins without missing or repeating a call, so a local day runs from its midnight to the next midnight, in any time zone:
 
 ```python
 from datetime import datetime, timedelta
@@ -54,4 +54,4 @@ rejected = list(client.calls.list(start=day, result=CallResult.REJECTED))
 - With a `start`, polling for recent calls is cheap.
 - Each call comes once, even when new calls arrive while you iterate.
 
-To keep your own copy of the call log up to date, follow the [call-log sync recipe](production.md#syncing-the-call-log).
+To keep your own copy of the call log up to date, follow the [call-log sync recipe](web-apps-and-jobs.md#syncing-the-call-log).

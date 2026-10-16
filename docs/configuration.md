@@ -31,7 +31,7 @@ print(key_details.unit_access.type)  # all, buildings or units
 | `base_url` | `YAMA_API_BASE_URL`, else [`DEFAULT_BASE_URL`][yama.DEFAULT_BASE_URL] | Where requests go. |
 | `timeout` | `30.0` | Seconds allowed for each phase of an attempt: connecting, writing, reading, and waiting for a pooled connection. Pass an `httpx.Timeout` to set the phases one by one, or `httpx.Timeout(None)` for no limit. |
 | `max_retries` | `2` | Retries after a 429, a 5xx or a network error. See [Errors and retries](errors.md). |
-| `http_client` | a new `httpx.Client` | Your own client to send through. It must be an `httpx.Client`: the client isn't async yet (see [Async code](production.md#async-code)). |
+| `http_client` | a new `httpx.Client` | Your own client to send through. It must be an `httpx.Client`: the client isn't async yet (see [Async code](web-apps-and-jobs.md#async-code)). |
 
 ```python
 import httpx
@@ -67,7 +67,7 @@ with httpx.Client(proxy="http://proxy.example:3128") as http:
 
 ## Closing
 
-A client holds a connection pool. Use it as a context manager, or call `close()` when you're done; using it afterwards raises `ValueError`. One client is safe to share between threads, so most programs need only one. See [Web apps and background jobs](production.md).
+A client holds a connection pool. Use it as a context manager, or call `close()` when you're done; using it afterwards raises `ValueError`. One client is safe to share between threads, so most programs need only one. See [Web apps and background jobs](web-apps-and-jobs.md).
 
 ```python
 with Yama() as client:
