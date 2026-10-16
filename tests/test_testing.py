@@ -159,6 +159,10 @@ def test_test_1_replays_a_create_with_the_same_idempotency_key(api: httpx.Client
         ({"uuid": MISSING}, "uuid"),
         ({"unit": MISSING}, "unit"),
         ({"code": None}, "code"),
+        ({"code": "12"}, "code"),
+        ({"code": "١٢٣"}, "code"),
+        ({"code": "²²²"}, "code"),
+        ({"name": "x" * 256}, "name"),
     ],
 )
 def test_test_1_rejects_bad_codes(api: httpx.Client, change: dict[str, Any], field: str) -> None:

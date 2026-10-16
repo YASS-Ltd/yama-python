@@ -48,6 +48,12 @@ def validate(component: str, instance: object) -> None:
     )
 
 
+def schema_component(name: str) -> dict[str, Any]:
+    """`#/components/schemas/<name>`, as the schema states it."""
+    component: dict[str, Any] = _schema()["components"]["schemas"][name]
+    return component
+
+
 def operations() -> dict[str, dict[str, Any]]:
     """Every operation in the schema, by its `operationId`."""
     return {

@@ -21,12 +21,15 @@ from __future__ import annotations
 
 import copy
 import json
+import re
 import threading
 import uuid
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 import httpx
+
+from yama.models import _CODE_PATTERN, _NAME_MAX
 
 __all__ = ["fake_transport"]
 
@@ -300,8 +303,10 @@ class _FakeAPI:
         if "unit" in body and body["unit"] not in self._data["units"]:
             errors["unit"] = ["Unit does not exist."]
         code = body.get("code", "000")
-        if not (isinstance(code, str) and code.isdigit() and 3 <= len(code) <= 15):
+        if not (isinstance(code, str) and re.fullmatch(_CODE_PATTERN, code)):
             errors["code"] = ["Enter 3 to 15 digits."]
+        if isinstance(name := body.get("name"), str) and len(name) > _NAME_MAX:
+            errors["name"] = [f"Ensure this field has no more than {_NAME_MAX} characters."]
         try:
             expiry = _instant(body.get("expires_at"))
             # A code's current expiry, sent back unchanged, is accepted even once it has passed.
