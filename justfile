@@ -59,3 +59,15 @@ schema-diff:
 [group('schema')]
 schema-pull:
     curl -fsS {{schema_url}} -o {{schema_file}}
+
+# Read-only unless YAMA_LIVE_WRITE=1, which briefly creates a real door code: never set it
+# against production.
+[group('release')]
+[doc("Run the live tests against a non-production Yama API, with YAMA_API_KEY set")]
+test-live base_url="" *args:
+    YAMA_LIVE_BASE_URL={{quote(base_url)}} uv run pytest -m live -rs {{args}}
+
+# Cut a release from a clean main: just release [--dry-run] [X.Y.Z]
+[group('release')]
+release *args:
+    uv run python -m tools.release {{args}}
