@@ -78,7 +78,8 @@ Written in [EARS](https://alistairmavin.com/ears/) form: each is one testable se
 - **RTY-4** When the API gives no `Retry-After`, the client shall wait an increasing, jittered delay between attempts.
 - **RTY-5** If a request gets a 4xx other than 429, then the client shall not retry it, except as RTY-6 allows.
 - **RTY-6** When a request carrying an `Idempotency-Key` gets a 409 (that key still in flight), the client shall retry it like any other retry, counting it against `max_retries` and waiting as RTY-2 and RTY-4 say.
-- **RTY-7** If a request that is not a GET and carries no `Idempotency-Key` gets a 5xx or a network error after connecting (so the API may have run it), then the client shall raise the error without retrying.
+- **RTY-7** If a POST that carries no `Idempotency-Key` gets a 5xx or a network error after connecting (so the API may have run it), then the client shall raise the error without retrying.
+- **RTY-8** If a retry of a DELETE gets a 404, then the client shall treat the delete as done, since an earlier attempt may have run it.
 
 ### Pagination (PAG)
 
@@ -97,6 +98,7 @@ Written in [EARS](https://alistairmavin.com/ears/) form: each is one testable se
 - **CODE-1** When creating an access code, the client shall send an `Idempotency-Key` header: the caller's `idempotency_key` where given, or else a new random UUID.
 - **CODE-2** The client shall send the same `Idempotency-Key` on every retry of a create.
 - **CODE-3** When updating an access code, the client shall send only the fields the caller set, including fields set to `None`.
+- **CODE-4** If a create fails with a `YamaError`, then the client shall set the error's `idempotency_key` to the key it sent, so the caller can retry with it.
 
 ### Models (MOD)
 
@@ -105,6 +107,7 @@ Written in [EARS](https://alistairmavin.com/ears/) form: each is one testable se
 - **MOD-3** When a response contains an enum value the client doesn't know, the client shall return it as a plain string.
 - **MOD-4** If a request model is given a field it doesn't define, or a datetime without a timezone, then building the model shall raise `pydantic.ValidationError`.
 - **MOD-5** The client shall check only types and required fields in request models, leaving value rules such as lengths to the API.
+- **MOD-6** The client's enum members shall give their value from `str()` and in f-strings, as the plain strings of MOD-3 do.
 
 ### Coverage (OPS)
 

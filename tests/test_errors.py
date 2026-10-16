@@ -133,6 +133,11 @@ def test_err_4_raises_type_or_value_error_for_invalid_arguments(
         Yama(**{"api_key": "k", **kwargs})  # type: ignore[arg-type]
 
 
+def keyed(error: YamaError) -> YamaError:
+    error.idempotency_key = "job-17"
+    return error
+
+
 @pytest.mark.parametrize(
     "error",
     [
@@ -144,6 +149,8 @@ def test_err_4_raises_type_or_value_error_for_invalid_arguments(
         BadRequestError(400, "code: Taken.", {"code": ["Taken."]}, "v2", "POST", "/api/v2/x/"),
         RateLimitError(429, "Slow down.", {}, "v2", "GET", "/api/v2/x/", retry_after=12),
         ServerError(502, "Bad Gateway", "<html></html>", None, "GET", "/api/v2/x/"),
+        keyed(ConflictError(409, "In progress.", {}, "v2", "POST", "/api/v2/codes/")),
+        keyed(APITimeoutError("Request timed out: ReadTimeout")),
     ],
 )
 def test_err_5_survives_a_pickle_round_trip(error: YamaError) -> None:

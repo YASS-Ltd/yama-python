@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from enum import Enum
 from typing import Any
 from uuid import UUID
 
@@ -181,6 +182,25 @@ def test_mod_3_returns_unknown_enum_values_as_strings() -> None:
     assert call.steps[0].kind == "teleported"
     assert call.steps[0].attempt_result == "maybe"
     assert call.result != CallResult.REJECTED
+
+
+@pytest.mark.parametrize(
+    "enum",
+    [
+        AccessLevel,
+        UnitAccessType,
+        DoorDigit,
+        CallResult,
+        CallStepKind,
+        CodeAttemptResult,
+        DialStatus,
+    ],
+)
+def test_mod_6_enum_members_format_as_their_value(enum: type[Enum]) -> None:
+    for member in enum:
+        assert str(member) == member.value
+        assert f"{member}" == member.value
+        assert f"{member:>20}" == f"{member.value:>20}"
 
 
 def test_mod_4_request_models_reject_unknown_fields() -> None:

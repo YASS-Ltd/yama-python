@@ -2,7 +2,8 @@
 
 Response models mirror the API's schema field for field. They're frozen, keep fields the
 client doesn't know (read them as attributes, or from `model_extra`), and give an enum value
-the client doesn't know as a plain string, so compare with `==`. Request models reject unknown
+the client doesn't know as a plain string, so compare with `==`. Enum members format as their
+value, so `str()` and f-strings give the same text either way. Request models reject unknown
 fields and datetimes without a time zone, and leave value rules, such as lengths, to the API.
 """
 
@@ -36,7 +37,14 @@ __all__ = [
 ]
 
 
-class AccessLevel(str, Enum):
+class _StrEnum(str, Enum):
+    """A `str` enum whose members format as their value, in `str()` and f-strings alike."""
+
+    def __str__(self) -> str:
+        return str(self.value)
+
+
+class AccessLevel(_StrEnum):
     """What an API key may do with a resource."""
 
     NONE = "none"
@@ -44,7 +52,7 @@ class AccessLevel(str, Enum):
     WRITE = "write"
 
 
-class UnitAccessType(str, Enum):
+class UnitAccessType(_StrEnum):
     """Which units an API key reaches: all of them, those in some buildings, or some units."""
 
     ALL = "all"
@@ -52,7 +60,7 @@ class UnitAccessType(str, Enum):
     UNITS = "units"
 
 
-class DoorDigit(str, Enum):
+class DoorDigit(_StrEnum):
     """The digit Yama sends to a building's intercom to open the door for a unit."""
 
     ZERO = "0"
@@ -67,7 +75,7 @@ class DoorDigit(str, Enum):
     NINE = "9"
 
 
-class CallResult(str, Enum):
+class CallResult(_StrEnum):
     """How a call ended."""
 
     CODE_ACCEPTED = "code_accepted"
@@ -80,7 +88,7 @@ class CallResult(str, Enum):
     NOT_RECORDED = "not_recorded"
 
 
-class CallStepKind(str, Enum):
+class CallStepKind(_StrEnum):
     """What happened at one step of a call."""
 
     RECEIVED = "received"
@@ -95,7 +103,7 @@ class CallStepKind(str, Enum):
     COMPLETED = "completed"
 
 
-class CodeAttemptResult(str, Enum):
+class CodeAttemptResult(_StrEnum):
     """How a code entered at the intercom was judged."""
 
     ACCEPTED = "accepted"
@@ -105,7 +113,7 @@ class CodeAttemptResult(str, Enum):
     REFUSED = "refused"
 
 
-class DialStatus(str, Enum):
+class DialStatus(_StrEnum):
     """How a forwarded call ended."""
 
     COMPLETED = "completed"
@@ -232,8 +240,9 @@ class CallLogEntry(_Response):
 class AccessCodeCreate(_Request):
     """A new access code, or the whole of one being replaced.
 
-    Leave `expires_at` out for a code that never expires; when replacing, leaving it out
-    keeps the current expiry and None clears it.
+    `name` is optional. Leave `expires_at` out for a code that never expires; when replacing,
+    leaving it out keeps the current expiry and None clears it. The API doesn't say what
+    leaving `name` out does on a replace, so pass the name the code should have.
     """
 
     unit: UUID

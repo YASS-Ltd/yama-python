@@ -6,6 +6,10 @@ from __future__ import annotations
 class YamaError(Exception):
     """Base class for every error the client raises, and raised itself for misconfiguration."""
 
+    idempotency_key: str | None = None
+    """The `Idempotency-Key` a failed `codes.create` sent, so you can retry with it; None for
+    any other call."""
+
 
 class APIConnectionError(YamaError):
     """The request failed at the network level, after retries. It may never have been sent."""

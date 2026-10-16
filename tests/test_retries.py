@@ -6,9 +6,11 @@ import pytest
 from tests.mock import make_client, recorder, respond
 from yama import (
     AccessCodeCreate,
+    AccessCodeUpdate,
     APIConnectionError,
     APIStatusError,
     ConflictError,
+    NotFoundError,
     RateLimitError,
     ServerError,
 )
@@ -177,16 +179,27 @@ AMBIGUOUS = [
 AMBIGUOUS_IDS = ["500", "503", "read-timeout", "write-timeout", "read", "write", "eof"]
 
 
-@pytest.mark.parametrize("method", ["POST", "PUT", "PATCH", "DELETE"])
 @pytest.mark.parametrize("failure", AMBIGUOUS, ids=AMBIGUOUS_IDS)
-def test_rty_7_does_not_retry_an_ambiguous_failure_of_a_write_without_a_key(
+def test_rty_7_does_not_retry_an_ambiguous_failure_of_a_post_without_a_key(
+    failure: httpx.Response | Exception,
+) -> None:
+    handler, requests = recorder(failure, respond(201))
+    client, sleeps = make_client(handler)
+    with pytest.raises((ServerError, APIConnectionError)):
+        client._request("POST", "codes/", json={})
+    assert (len(requests), sleeps) == (1, [])
+
+
+@pytest.mark.parametrize("method", ["PUT", "PATCH", "DELETE"])
+@pytest.mark.parametrize("failure", AMBIGUOUS, ids=AMBIGUOUS_IDS)
+def test_rty_7_retries_an_ambiguous_failure_of_a_put_patch_or_delete(
     method: str, failure: httpx.Response | Exception
 ) -> None:
     handler, requests = recorder(failure, httpx.Response(204))
     client, sleeps = make_client(handler)
-    with pytest.raises((ServerError, APIConnectionError)):
-        client._request(method, f"codes/{UNIT}/", json=None if method == "DELETE" else {})
-    assert (len(requests), sleeps) == (1, [])
+    client._request(method, f"codes/{UNIT}/", json=None if method == "DELETE" else {})
+    assert (len(requests), len(sleeps)) == (2, 1)
+    assert len({r.content for r in requests}) == 1
 
 
 @pytest.mark.parametrize("failure", AMBIGUOUS, ids=AMBIGUOUS_IDS)
@@ -219,9 +232,28 @@ def test_rty_7_retries_any_method_when_the_api_never_ran_the_request(
     assert len(requests) == 2
 
 
-def test_rty_7_a_delete_that_gets_a_5xx_raises_instead_of_retrying_into_a_404() -> None:
-    handler, requests = recorder(respond(503), respond(404, {"detail": "Not found."}))
+@pytest.mark.parametrize(
+    "failure", [respond(503), httpx.ReadTimeout("slow")], ids=["503", "timeout"]
+)
+def test_rty_8_treats_a_404_on_a_retried_delete_as_done(
+    failure: httpx.Response | Exception,
+) -> None:
+    handler, requests = recorder(failure, respond(404, {"detail": "Not found."}))
     client, _ = make_client(handler)
-    with pytest.raises(ServerError):
+    client.codes.delete(UNIT)  # no NotFoundError
+    assert len(requests) == 2
+
+
+def test_rty_8_a_delete_whose_first_attempt_gets_a_404_raises_not_found() -> None:
+    handler, requests = recorder(respond(404, {"detail": "Not found."}))
+    client, sleeps = make_client(handler)
+    with pytest.raises(NotFoundError):
         client.codes.delete(UNIT)
-    assert len(requests) == 1
+    assert (len(requests), sleeps) == (1, [])
+
+
+def test_rty_8_a_404_on_a_retry_of_anything_but_a_delete_still_raises() -> None:
+    handler, _ = recorder(respond(503), respond(404, {"detail": "Not found."}))
+    client, _ = make_client(handler)
+    with pytest.raises(NotFoundError):
+        client.codes.update(UNIT, AccessCodeUpdate(name="Cleaner"))

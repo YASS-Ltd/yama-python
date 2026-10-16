@@ -81,13 +81,14 @@ def _retry_wait(
     `result`, a response or an httpx error; None means don't retry.
 
     A 429, or a failure to connect, means the API never ran the request, so any method is
-    retried. A 5xx or any other network failure may come after the API ran it, so only a GET,
-    or a request with an `Idempotency-Key` (whose 409 means "still running"), is retried.
+    retried. A 5xx or any other network failure may come after the API ran it, so a POST is
+    retried only with an `Idempotency-Key` (whose 409 means "still running"); every other
+    method is safe to repeat.
     """
     if attempt > max_retries:
         return None
     keyed = "Idempotency-Key" in request.headers
-    replayable = keyed or request.method == "GET"
+    replayable = keyed or request.method != "POST"
     if isinstance(result, httpx.HTTPError):
         if isinstance(result, _NOT_SENT) or (
             replayable and isinstance(result, _TRANSPORT_FAILURES)
@@ -201,7 +202,6 @@ class Yama:
         timeout: Seconds allowed for each phase of an attempt (connect, write, read, pool),
             or an `httpx.Timeout` to set them one by one.
         max_retries: How many times to retry a request after a 429, a 5xx or a network error.
-            A replace, update or delete that may have reached the API isn't retried.
         http_client: Your own `httpx.Client` to send through. The client applies its own
             URL, timeout and headers to each request, and leaves closing it to you.
 
@@ -356,6 +356,8 @@ class Yama:
             if response is not None:
                 if response.is_success:
                     return _success(request, response)
+                if attempt > 1 and request.method == "DELETE" and response.status_code == 404:
+                    return None  # an earlier attempt deleted it (RTY-8)
                 error = _status_error(request, response)
             wait = _retry_wait(attempt, self._max_retries, request, result)
             if wait is None:

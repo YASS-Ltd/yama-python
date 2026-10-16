@@ -11,7 +11,16 @@ import pytest
 
 from tests.mock import make_client, recorder, respond
 from tests.schema import operations
-from yama import AccessCodeCreate, AccessCodeUpdate, Yama, YamaError
+from yama import (
+    AccessCodeCreate,
+    AccessCodeUpdate,
+    APITimeoutError,
+    BadRequestError,
+    ConflictError,
+    NotFoundError,
+    Yama,
+    YamaError,
+)
 from yama.models import AccessCode, DoorDigit
 
 UNIT = "dd1053d5-0a4b-4c0d-a619-6a1457d97de6"
@@ -121,6 +130,43 @@ def test_err_4_rejects_a_uuid_that_is_not_one_without_sending(bad: str) -> None:
     assert requests == []
 
 
+@pytest.mark.parametrize(
+    "call_list",
+    [
+        lambda c: c.units.list(building="not-a-uuid"),
+        lambda c: c.contacts.list(unit=""),
+        lambda c: c.codes.list(unit="../api-key"),
+        lambda c: c.calls.list(unit="not-a-uuid"),
+        lambda c: c.calls.list(building="not-a-uuid"),
+    ],
+)
+def test_err_4_rejects_a_uuid_filter_that_is_not_one_without_sending(
+    call_list: Callable[[Yama], Any],
+) -> None:
+    handler, requests = recorder(page())
+    client, _ = make_client(handler)
+    with pytest.raises(ValueError):
+        call_list(client)
+    assert requests == []
+
+
+@pytest.mark.parametrize(
+    "bad",
+    ["", "job 17", "job-17\n", "caf\u00e9", "k" * 256],
+    ids=["empty", "space", "newline", "non-ascii", "too-long"],
+)
+def test_err_4_rejects_an_idempotency_key_that_is_not_printable_ascii_or_too_long(
+    bad: str,
+) -> None:
+    handler, requests = recorder(respond(201, CODE))
+    client, _ = make_client(handler)
+    with pytest.raises(ValueError):
+        client.codes.create(AccessCodeCreate(unit=UNIT, code="4321"), idempotency_key=bad)
+    assert requests == []
+    client.codes.create(AccessCodeCreate(unit=UNIT, code="4321"), idempotency_key="k" * 255)
+    assert len(requests) == 1
+
+
 def test_err_4_rejects_request_data_of_the_wrong_model() -> None:
     handler, requests = recorder(respond())
     client, _ = make_client(handler)
@@ -203,6 +249,34 @@ def test_code_2_sends_the_same_idempotency_key_on_every_retry(
     assert len(requests) == 3
     assert len({r.headers["Idempotency-Key"] for r in requests}) == 1
     assert len({r.content for r in requests}) == 1
+
+
+@pytest.mark.parametrize("key", [None, "job-17"])
+@pytest.mark.parametrize(
+    ("failure", "error_class"),
+    [
+        (respond(409, {"detail": "In progress."}), ConflictError),
+        (httpx.ReadTimeout("slow"), APITimeoutError),
+        (respond(400, {"code": ["Taken."]}), BadRequestError),
+    ],
+)
+def test_code_4_puts_the_idempotency_key_sent_on_a_failed_create(
+    key: str | None, failure: httpx.Response | Exception, error_class: type[YamaError]
+) -> None:
+    handler, requests = recorder(failure)
+    client, _ = make_client(handler)
+    with pytest.raises(error_class) as caught:
+        client.codes.create(AccessCodeCreate(unit=UNIT, code="4321"), idempotency_key=key)
+    assert caught.value.idempotency_key == requests[0].headers["Idempotency-Key"]
+    assert key is None or caught.value.idempotency_key == key
+
+
+def test_code_4_other_calls_leave_idempotency_key_none() -> None:
+    handler, _ = recorder(respond(404, {"detail": "Not found."}))
+    client, _ = make_client(handler)
+    with pytest.raises(NotFoundError) as caught:
+        client.codes.delete(CODE_ID)
+    assert caught.value.idempotency_key is None
 
 
 def test_code_3_update_sends_only_the_fields_set_including_none() -> None:
