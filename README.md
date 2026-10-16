@@ -36,7 +36,7 @@ uv add yama        # or: pip install yama
 ## Quick start
 
 ```python
-from datetime import date
+from datetime import datetime, timezone
 
 from yama import Yama
 
@@ -45,7 +45,9 @@ client = Yama()  # reads YAMA_API_KEY
 for code in client.codes.list():
     print(code.name, code.expires_at)
 
-for call in client.calls.list(start=date(2026, 10, 1), end=date(2026, 10, 31)):
+start = datetime(2026, 10, 1, tzinfo=timezone.utc)
+end = datetime(2026, 11, 1, tzinfo=timezone.utc)  # exclusive: all of October
+for call in client.calls.list(start=start, end=end):
     print(call.started_at, call.result)
 ```
 

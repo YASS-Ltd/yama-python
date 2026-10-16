@@ -2,7 +2,7 @@
 every request and response checked against the vendored schema."""
 
 from collections.abc import Iterator
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
 import httpx
@@ -92,6 +92,10 @@ def test_scenario_drives_every_operation(client: Yama) -> None:
     accepted = list(client.calls.list(result=CallResult.CODE_ACCEPTED, building=calls[0].building))
     assert accepted and all(c.result == CallResult.CODE_ACCEPTED for c in accepted)
     october = list(
-        client.calls.list(start=date(2026, 10, 1), end=date(2026, 10, 31), unit=unit.uuid)
+        client.calls.list(
+            start=datetime(2026, 10, 1, tzinfo=timezone.utc),
+            end=datetime(2026, 11, 1, tzinfo=timezone.utc),
+            unit=unit.uuid,
+        )
     )
     assert october and all(c.unit == unit.uuid for c in october)

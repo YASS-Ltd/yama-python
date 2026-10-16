@@ -5,6 +5,7 @@ from collections.abc import Callable
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 import httpx
 import pytest
@@ -21,7 +22,9 @@ from yama import (
     Yama,
     YamaError,
 )
-from yama.models import AccessCode, DoorDigit
+from yama._resources import _unique
+from yama.models import AccessCode, CallLogEntry, DoorDigit
+from yama.testing import fake_transport
 
 UNIT = "dd1053d5-0a4b-4c0d-a619-6a1457d97de6"
 CODE_ID = "1dc19ab9-2785-4999-930a-0096ce94c485"
@@ -33,13 +36,13 @@ def page(*items: dict[str, Any], next_url: str | None = None) -> httpx.Response:
     return respond(body={"count": len(items), "next": next_url, "results": list(items)})
 
 
-def call(n: int) -> dict[str, Any]:
+def call(n: int, started_at: str = "2026-10-10T22:09:11Z") -> dict[str, Any]:
     return {
         "uuid": f"00000000-0000-4000-8000-{n:012d}",
         "unit": UNIT,
         "building": None,
         "reference": f"REF{n}",
-        "started_at": "2026-10-10T22:09:11Z",
+        "started_at": started_at,
         "duration_seconds": None,
         "result": "hung_up",
         "result_label": "Hung up",
@@ -175,7 +178,7 @@ def test_err_4_rejects_request_data_of_the_wrong_model() -> None:
     with pytest.raises(TypeError):
         client.codes.update(CODE_ID, AccessCodeCreate(unit=UNIT, code="4321"))  # type: ignore[arg-type]
     with pytest.raises(TypeError):
-        client.calls.list(start=datetime(2026, 10, 1, tzinfo=timezone.utc), end=date(2026, 10, 2))
+        client.calls.list(start=datetime(2026, 10, 1, tzinfo=timezone.utc), end=date(2026, 10, 2))  # type: ignore[arg-type]
     assert requests == []
 
 
@@ -324,24 +327,117 @@ def test_call_1_deduplicates_within_one_iteration_only() -> None:
     assert len(list(client.calls.list())) == 1
 
 
-def test_call_2_treats_omitted_dates_as_an_open_range() -> None:
+def test_call_1_remembers_only_the_last_two_pages_of_calls() -> None:
+    calls = [CallLogEntry.model_validate(call(n)) for n in range(1001)]
+    # A repeat within two pages (1,000 calls) of the first is skipped...
+    assert len(list(_unique(iter([*calls[:1000], calls[0]])))) == 1000
+    # ...and one further back is forgotten, so memory stays bounded.
+    assert len(list(_unique(iter([*calls, calls[0]])))) == 1002
+
+
+VANCOUVER = ZoneInfo("America/Vancouver")
+UTC = timezone.utc
+
+
+def test_call_2_treats_omitted_times_as_an_open_range() -> None:
     handler, requests = recorder(page())
     client, _ = make_client(handler)
-    today = datetime.now(timezone.utc).date().isoformat()
+    today = datetime.now(UTC).date().isoformat()
     list(client.calls.list())
-    list(client.calls.list(start=date(2026, 10, 1)))
-    list(client.calls.list(end=date(2026, 10, 31)))
+    list(client.calls.list(start=datetime(2026, 10, 1, tzinfo=UTC)))
+    list(client.calls.list(end=datetime(2026, 11, 1, tzinfo=UTC)))
     ranges = [(r.url.params["start"], r.url.params["end"]) for r in requests]
-    assert ranges[0] == ("2000-01-01", today)
-    assert ranges[1][0] == "2026-10-01"
-    assert ranges[2] == ("2000-01-01", "2026-10-31")
+    assert ranges == [
+        ("2000-01-01", today),
+        ("2026-10-01", today),
+        ("2000-01-01", "2026-10-31"),
+    ]
 
 
-def test_call_3_sends_dates_in_iso_8601() -> None:
+@pytest.mark.parametrize(
+    ("start", "end", "dates"),
+    [
+        # One Vancouver day (UTC-7) spans two UTC dates.
+        (
+            datetime(2026, 10, 10, tzinfo=VANCOUVER),
+            datetime(2026, 10, 11, tzinfo=VANCOUVER),
+            ("2026-10-10", "2026-10-11"),
+        ),
+        # An end exactly at UTC midnight doesn't pull in the next date.
+        (
+            datetime(2026, 10, 1, tzinfo=UTC),
+            datetime(2026, 11, 1, tzinfo=UTC),
+            ("2026-10-01", "2026-10-31"),
+        ),
+        (
+            datetime(2026, 10, 1, tzinfo=UTC),
+            datetime(2026, 11, 1, 0, 0, 0, 1, tzinfo=UTC),
+            ("2026-10-01", "2026-11-01"),
+        ),
+        # A start east of UTC begins on the UTC date before.
+        (
+            datetime(2026, 10, 1, tzinfo=timezone(timedelta(hours=9))),
+            datetime(2026, 10, 2, tzinfo=UTC),
+            ("2026-09-30", "2026-10-01"),
+        ),
+        # An empty range still sends a valid one.
+        (
+            datetime(2026, 10, 1, tzinfo=UTC),
+            datetime(2026, 10, 1, tzinfo=UTC),
+            ("2026-10-01", "2026-10-01"),
+        ),
+    ],
+    ids=[
+        "vancouver-day",
+        "end-at-utc-midnight",
+        "end-just-after-midnight",
+        "start-east-of-utc",
+        "empty",
+    ],
+)
+def test_call_3_sends_the_utc_dates_covering_the_range(
+    start: datetime, end: datetime, dates: tuple[str, str]
+) -> None:
     handler, requests = recorder(page())
     client, _ = make_client(handler)
-    list(client.calls.list(start=date(2026, 1, 2), end=date(2026, 12, 31)))
-    assert (requests[0].url.params["start"], requests[0].url.params["end"]) == (
-        "2026-01-02",
-        "2026-12-31",
+    list(client.calls.list(start=start, end=end))
+    assert (requests[0].url.params["start"], requests[0].url.params["end"]) == dates
+
+
+def test_call_4_yields_only_calls_from_start_inclusive_to_end_exclusive() -> None:
+    times = [
+        "2026-10-10T06:59:59.999999Z",  # just before Vancouver midnight
+        "2026-10-10T07:00:00Z",  # Vancouver midnight: start, included
+        "2026-10-11T06:59:59.999999Z",
+        "2026-10-11T07:00:00Z",  # the next Vancouver midnight: end, excluded
+    ]
+    handler, _ = recorder(page(*(call(n, at) for n, at in enumerate(times))))
+    client, _ = make_client(handler)
+    day = client.calls.list(
+        start=datetime(2026, 10, 10, tzinfo=VANCOUVER), end=datetime(2026, 10, 11, tzinfo=VANCOUVER)
     )
+    assert [c.reference for c in day] == ["REF1", "REF2"]
+    open_end = client.calls.list(start=datetime(2026, 10, 10, 7, tzinfo=UTC))
+    assert [c.reference for c in open_end] == ["REF1", "REF2", "REF3"]
+    open_start = client.calls.list(end=datetime(2026, 10, 10, 7, tzinfo=UTC))
+    assert [c.reference for c in open_start] == ["REF0"]
+
+
+def test_call_4_filters_what_the_api_returns_for_whole_utc_dates() -> None:
+    client = Yama(api_key="test", http_client=httpx.Client(transport=fake_transport()))
+    # 9 October in Vancouver: the fake, like the API, returns all of 9 and 10 October UTC.
+    day = client.calls.list(
+        start=datetime(2026, 10, 9, tzinfo=VANCOUVER), end=datetime(2026, 10, 10, tzinfo=VANCOUVER)
+    )
+    assert [c.started_at for c in day] == [datetime(2026, 10, 9, 18, 30, tzinfo=UTC)]
+
+
+@pytest.mark.parametrize("name", ["start", "end"])
+def test_call_5_rejects_a_date_or_naive_datetime_without_sending(name: str) -> None:
+    handler, requests = recorder(page())
+    client, _ = make_client(handler)
+    with pytest.raises(TypeError, match="aware datetime"):
+        client.calls.list(**{name: date(2026, 10, 1)})  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="aware"):
+        client.calls.list(**{name: datetime(2026, 10, 1)})  # type: ignore[arg-type]
+    assert requests == []

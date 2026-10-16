@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
+from collections import deque
 from collections.abc import Iterator
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from enum import Enum
 from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
 from yama._errors import YamaError
-from yama._pagination import parse
+from yama._pagination import PAGE_SIZE, parse
 from yama.models import (
     AccessCode,
     AccessCodeCreate,
@@ -51,12 +52,13 @@ def _filters(**filters: object) -> dict[str, str]:
     }
 
 
-def _date(name: str, value: date | None, default: date) -> str:
-    if value is None:
-        return default.isoformat()
-    if isinstance(value, datetime) or not isinstance(value, date):
-        raise TypeError(f"{name} must be a date, not {type(value).__name__}.")
-    return value.isoformat()
+def _aware(name: str, value: datetime | None) -> datetime | None:
+    """`value`, checked to be a timezone-aware datetime or None (CALL-5)."""
+    if value is not None and not isinstance(value, datetime):
+        raise TypeError(f"{name} must be a timezone-aware datetime, not {type(value).__name__}.")
+    if value is not None and value.utcoffset() is None:
+        raise ValueError(f"{name} must be timezone-aware, such as with tzinfo=timezone.utc.")
+    return value
 
 
 def _body(data: AccessCodeCreate | AccessCodeUpdate, model: type) -> object:
@@ -227,24 +229,45 @@ class Calls(_Resource):
     def list(
         self,
         *,
-        start: date | None = None,
-        end: date | None = None,
+        start: datetime | None = None,
+        end: datetime | None = None,
         unit: UUID | str | None = None,
         building: UUID | str | None = None,
         result: CallResult | str | None = None,
     ) -> Iterator[CallLogEntry]:
-        """Every call from `start` to `end`, inclusive UTC dates, newest first, or only those
-        to `unit`, through `building`'s intercom, or with `result`.
+        """Every call that started at or after `start` and before `end`, newest first, or only
+        those to `unit`, through `building`'s intercom, or with `result`.
 
-        A date left out leaves that side of the range open, so with neither you get all
-        history. A call that shifts onto a later page as new calls arrive is yielded once.
+        `start` and `end` are timezone-aware datetimes, so one local day is from its midnight
+        to the next, in any time zone. Leaving one out leaves that side of the range open, so
+        with neither you get all history. A call that shifts onto the next page as new calls
+        arrive is yielded once.
+
+        Raises:
+            TypeError: `start` or `end` is a `date`, or anything else but a `datetime`.
+            ValueError: `start` or `end` has no time zone.
         """
+        start, end = _aware("start", start), _aware("end", end)
+        # The API takes whole UTC dates: those of `start` and of the last instant before `end`.
+        utc = timezone.utc
+        first = _EARLIEST if start is None else start.astimezone(utc).date()
+        last = (
+            datetime.now(utc).date()
+            if end is None
+            else (end.astimezone(utc) - timedelta(microseconds=1)).date()
+        )
         params = {
-            "start": _date("start", start, _EARLIEST),
-            "end": _date("end", end, datetime.now(timezone.utc).date()),
+            "start": first.isoformat(),
+            "end": max(first, last).isoformat(),
             **_filters(unit=_uuid_filter(unit), building=_uuid_filter(building), result=result),
         }
-        return _unique(self._client._list("calls/", CallLogEntry, params))
+        calls = _unique(self._client._list("calls/", CallLogEntry, params))
+        return (
+            call
+            for call in calls
+            if (start is None or call.started_at >= start)
+            and (end is None or call.started_at < end)
+        )
 
     def get(self, uuid: UUID | str) -> CallLogEntry:
         """One call, whatever its date. Raises `NotFoundError` if it isn't within reach."""
@@ -252,9 +275,17 @@ class Calls(_Resource):
 
 
 def _unique(calls: Iterator[CallLogEntry]) -> Iterator[CallLogEntry]:
-    """`calls` without any whose `uuid` was already yielded (CALL-1)."""
+    """`calls` without any whose `uuid` was yielded within the last two pages (CALL-1).
+
+    Calls are never deleted, so a call repeats only when new ones push it onto the next page;
+    remembering two pages' worth keeps memory bounded on a sync of all history.
+    """
+    recent: deque[UUID] = deque()
     seen: set[UUID] = set()
     for call in calls:
         if call.uuid not in seen:
+            if len(recent) == 2 * PAGE_SIZE:
+                seen.discard(recent.popleft())
+            recent.append(call.uuid)
             seen.add(call.uuid)
             yield call
