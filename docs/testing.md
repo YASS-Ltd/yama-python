@@ -1,6 +1,6 @@
 # Testing
 
-Test your own code against `yama.testing.fake_transport()`: an in-memory Yama API that needs no network or key. It's an `httpx.MockTransport`, so you pass it in through an `httpx.Client`:
+Test your own code against `yama.testing.fake_transport()`: an in-memory Yama API that needs no network or API key. It's an `httpx.MockTransport`, so you pass it in through an `httpx.Client`:
 
 ```python
 import httpx
@@ -13,7 +13,7 @@ for code in client.codes.list():
     print(code.code, code.name)
 ```
 
-The fake behaves like the API: lists take the same filters, codes can be created, replaced, updated and deleted, bad input gets the same 400s, and a missing object gets a 404. Creates honour idempotency keys, including the 422 for a key reused with different data and the 410 for a code deleted since. Each call to `fake_transport()` starts from its own fresh copy of the data, so tests don't affect each other.
+The fake behaves like the API: lists take the same filters, codes can be created, replaced, updated and deleted, bad input gets 400s in the API's format, and a missing object gets a 404. Creates honour idempotency keys, including the 422 for a key reused with different data and the 410 for a code deleted since. Each call to `fake_transport()` starts from its own fresh copy of the data, so tests don't affect each other.
 
 Any API key works, except `rate-limited`, which gets a 429 with a `Retry-After` of 120 seconds on every request, so you can test your handling of `RateLimitError` without waiting.
 
@@ -71,7 +71,7 @@ Every fake starts with the same made-up data. UUIDs all start `00000000-0000-400
 | `000000000053` | Unit 101 | 2026-10-08 07:15:42 | `code_not_accepted` |
 | `000000000054` | Unit 201 | 2026-09-30 12:00:00 | `hung_up` |
 
-The key may write codes, read everything else, and reaches all units.
+The API key may write codes, read everything else, and reaches all units.
 
 ```python
 from uuid import UUID

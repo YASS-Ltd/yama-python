@@ -78,8 +78,8 @@ class ApiKeyResource(_Resource):
     """The API key the client uses."""
 
     def get(self) -> ApiKeyDetails:
-        """What the key may do: its permissions, scopes, unit access and expiry. Any valid
-        key can read this, so it's a good first call."""
+        """What the API key may do: its permissions, scopes, unit access and expiry. Any valid
+        API key can read this, so it's a good first call."""
         return parse(ApiKeyDetails, self._client._request("GET", "api-key/"))
 
 
@@ -91,7 +91,7 @@ class Buildings(_Resource):
         return self._client._list("buildings/", Building)
 
     def get(self, uuid: UUID | str) -> Building:
-        """One building. Raises `NotFoundError` if it isn't within the key's reach."""
+        """One building. Raises `NotFoundError` if it isn't within the API key's reach."""
         return parse(Building, self._client._request("GET", f"buildings/{_uuid(uuid)}/"))
 
 
@@ -111,7 +111,7 @@ class Units(_Resource):
         return self._client._list("units/", Unit, params)
 
     def get(self, uuid: UUID | str) -> Unit:
-        """One unit. Raises `NotFoundError` if it isn't within the key's reach."""
+        """One unit. Raises `NotFoundError` if it isn't within the API key's reach."""
         return parse(Unit, self._client._request("GET", f"units/{_uuid(uuid)}/"))
 
 
@@ -131,7 +131,7 @@ class Contacts(_Resource):
         return self._client._list("contacts/", Contact, params)
 
     def get(self, uuid: UUID | str) -> Contact:
-        """One contact. Raises `NotFoundError` if it isn't within the key's reach."""
+        """One contact. Raises `NotFoundError` if it isn't within the API key's reach."""
         return parse(Contact, self._client._request("GET", f"contacts/{_uuid(uuid)}/"))
 
 
@@ -152,39 +152,29 @@ class Codes(_Resource):
         return self._client._list("codes/", AccessCode, params)
 
     def get(self, uuid: UUID | str) -> AccessCode:
-        """One access code. Raises `NotFoundError` if it isn't within the key's reach."""
+        """One access code. Raises `NotFoundError` if it isn't within the API key's reach."""
         return parse(AccessCode, self._client._request("GET", f"codes/{_uuid(uuid)}/"))
 
     def create(self, data: AccessCodeCreate, *, idempotency_key: str | None = None) -> AccessCode:
         """Create an access code.
 
-        The create is sent with an `Idempotency-Key`, so the client retries it after a timeout,
-        a 5xx or a 409 without creating the code twice. Each call gets a new key unless you
-        pass `idempotency_key`: 1 to 255 printable ASCII characters, without spaces.
-
-        Pass your own stable key when your code may repeat the create, such as a job that
-        re-runs, and always send it with the same data: work out time fields such as
-        `expires_at` once, outside the part that re-runs, since the same instant with a
-        different UTC offset is different data. For a web form, generate the key when you
-        render the form and carry it in a hidden field, which also makes a double submit safe.
-        The API remembers a key for 24 hours. It remembers a 400 too and replays it for that
-        key, so send corrected data with a new key: when you show the form again after a 400,
-        replace the hidden key with a new one,
-        or the corrected submit raises `UnprocessableEntityError`.
-
-        When the create fails, the error's `idempotency_key` is the key that was sent, even one
-        the client generated, so you can retry with it.
+        Sent with an idempotency key, so retries never create the code twice. Pass
+        `idempotency_key` (1 to 255 printable ASCII characters, without spaces) to repeat a
+        create yourself; see the errors guide. When the create fails, the error's
+        `idempotency_key` is the idempotency key that was sent.
 
         Raises:
             BadRequestError: A field is invalid, such as a code the unit already has.
-            ConflictError: A create with this key was still running after the retries; retry
-                later with the same key.
+            ConflictError: A create with this idempotency key was still running after the
+                retries; send it again later with the same idempotency key.
             APIConnectionError: The network failed after the retries, or, as `APITimeoutError`,
-                the last attempt timed out, so the create may have happened; retry with the
-                same key.
-            GoneError: The create with this key did happen, but the code has since been
-                deleted or is out of the key's reach. Don't repeat it with this key.
-            UnprocessableEntityError: This key was already used with different data.
+                the last attempt timed out, so the create may have happened; send it again
+                later with the same idempotency key.
+            GoneError: The create with this idempotency key did happen, but the code has since
+                been deleted or is out of the API key's reach. Don't repeat it with this
+                idempotency key.
+            UnprocessableEntityError: This idempotency key was already used with different
+                data.
             ValueError: `idempotency_key` isn't 1 to 255 printable ASCII characters, without
                 spaces.
         """
@@ -274,7 +264,8 @@ class Calls(_Resource):
         return (call for call in calls if end is None or call.started_at < end)
 
     def get(self, uuid: UUID | str) -> CallLogEntry:
-        """One call, whatever its date. Raises `NotFoundError` if it isn't within reach."""
+        """One call, whatever its date. Raises `NotFoundError` if it isn't within the API key's
+        reach."""
         return parse(CallLogEntry, self._client._request("GET", f"calls/{_uuid(uuid)}/"))
 
 

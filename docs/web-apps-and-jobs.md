@@ -44,20 +44,13 @@ from yama import Yama
 client = Yama()
 
 
-async def unit_names() -> list[str]:
+async def main() -> None:
     units = await asyncio.to_thread(lambda: list(client.units.list()))
-    return [unit.name for unit in units]
+    building = await asyncio.to_thread(client.buildings.get, units[0].building)
+    print(building.name, len(units))
 
 
-async def dashboard() -> None:
-    names, codes = await asyncio.gather(
-        unit_names(),
-        asyncio.to_thread(lambda: list(client.codes.list())),
-    )
-    print(f"{len(names)} units, {len(codes)} codes")
-
-
-asyncio.run(dashboard())
+asyncio.run(main())
 ```
 
 Cancelling the awaiting task doesn't stop a call already running in its thread: it carries on, within its timeout and retries, and its result is dropped. That matters for a create, which may still happen. Pass an `idempotency_key` you can repeat (see [Creates that are safe to repeat](errors.md#creates-that-are-safe-to-repeat)).

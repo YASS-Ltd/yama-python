@@ -4,11 +4,12 @@ from __future__ import annotations
 
 
 class YamaError(Exception):
-    """Base class for every error the client raises, and raised itself for misconfiguration."""
+    """Base class for every error the client raises. Raised itself for misconfiguration, or a
+    response the client can't read."""
 
     idempotency_key: str | None = None
-    """The `Idempotency-Key` a failed `codes.create` sent, so you can retry with it; None for
-    any other call."""
+    """The idempotency key a failed `codes.create` sent, so you can send it again with it;
+    None for any other call."""
 
 
 class APIConnectionError(YamaError):
@@ -20,7 +21,7 @@ class APITimeoutError(APIConnectionError):
 
 
 class APIStatusError(YamaError):
-    """The API answered with a non-2xx status."""
+    """The base class for HTTP errors; raised itself for a status without its own class."""
 
     def __init__(
         self,
@@ -70,26 +71,27 @@ class PermissionDeniedError(APIStatusError):
 
 
 class NotFoundError(APIStatusError):
-    """404: no such object within the key's reach."""
+    """404: no such object within the API key's reach."""
 
 
 class ConflictError(APIStatusError):
-    """409: a request with the same `Idempotency-Key` is still being processed, after
+    """409: a request with the same idempotency key is still being processed, after
     retries."""
 
 
 class GoneError(APIStatusError):
-    """410: a create replayed with its `Idempotency-Key` did happen, but the code it created
-    has since been deleted or is out of the key's reach. Don't create it again with that key."""
+    """410: a create repeated with its idempotency key did happen, but the code it created has
+    since been deleted or is out of the API key's reach. Don't create it again with that
+    idempotency key."""
 
 
 class UnprocessableEntityError(APIStatusError):
-    """422: the `Idempotency-Key` was already used with a different request. Each create needs
-    its own key."""
+    """422: the idempotency key was already used with a different request. Each create needs
+    its own idempotency key."""
 
 
 class RateLimitError(APIStatusError):
-    """429: too many requests, after retries, or with a `Retry-After` too long to wait."""
+    """429: too many requests, after retries, or at once when the wait is over 60 seconds."""
 
     def __init__(
         self,
@@ -104,7 +106,8 @@ class RateLimitError(APIStatusError):
         super().__init__(status_code, detail, body, api_version, method, path)
         self.args = (*self.args, retry_after)
         self.retry_after = retry_after
-        """Seconds the API asked the client to wait, from `Retry-After`."""
+        """Seconds the API asked the client to wait, from `Retry-After`; None when it didn't
+        say."""
 
 
 class ServerError(APIStatusError):

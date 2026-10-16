@@ -2,7 +2,7 @@
 
 ## The API key
 
-Create a key in the Yama portal under **Settings › API keys**. `Yama()` reads it from the `YAMA_API_KEY` environment variable:
+Create an API key in the Yama portal under **Settings › API keys**. `Yama()` reads it from the `YAMA_API_KEY` environment variable:
 
 ```python
 from yama import Yama
@@ -43,7 +43,7 @@ client = Yama(timeout=httpx.Timeout(10.0, connect=3.0), max_retries=4)
 
 ## A copy with other settings
 
-`with_options()` returns a copy with a different `timeout` or `max_retries` that shares the original's connections, key and base URL. It's cheap, so use it where one call site needs different settings, such as a web view that should fail fast:
+`with_options()` returns a copy with a different `timeout` or `max_retries` that shares the original's connections, API key and base URL. It's cheap, so use it where one call site needs different settings, such as a web view that should fail fast:
 
 ```python
 fast = client.with_options(timeout=5.0, max_retries=0)

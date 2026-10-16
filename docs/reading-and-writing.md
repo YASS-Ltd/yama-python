@@ -4,18 +4,20 @@ Your buildings, units, contacts and call log are read-only through the API. Acce
 
 ## Reading
 
-`get()` returns one object by its UUID, and raises `NotFoundError` if it isn't within your key's reach. `list()` returns an iterator of every object. It requests nothing until you start iterating, then fetches more as it goes. Stop iterating, and it stops requesting.
+`get()` returns one object by its UUID, and raises `NotFoundError` if it isn't within your API key's reach. `list()` returns an iterator of every object. It requests nothing until you start iterating, then fetches more as it goes. Stop iterating, and it stops requesting.
+
+A list shows changes made while you iterate it: deleting or changing the items you're listing can make it skip some, so finish the list before changing what's in it.
 
 ```python
 from yama import Yama
 
 client = Yama()
 
-for unit in client.units.list():
+units = list(client.units.list())
+for unit in units:
     print(unit.name, unit.door_digit)
 
-first_building = next(client.buildings.list())
-building = client.buildings.get(first_building.uuid)
+building = client.buildings.get(units[0].building)
 ```
 
 ### Filters
@@ -31,7 +33,7 @@ for unit in client.units.list(building=building.uuid, door_digit=DoorDigit.NINE)
 cleaners = list(client.codes.list(search="clean"))  # names containing "clean", any case
 ```
 
-A UUID filter that isn't a valid UUID raises `ValueError` without sending a request.
+A UUID filter that isn't a valid UUID raises `ValueError` without sending a request. A `unit` or `building` filter your API key can't reach gives an empty list, not an error.
 
 ### What you get back
 
@@ -50,7 +52,7 @@ The API adds fields and enum values over time without a new version, and the cli
 
 ## The call log
 
-`calls.list()` takes an optional `start` and `end`, as timezone-aware datetimes, and yields the calls that started at or after `start` and before `end`, newest first. Because a call at exactly `end` is left out, one range can end where the next begins without missing or repeating a call, so a local day runs from its midnight to the next midnight, in any time zone:
+`calls.list()` takes an optional `start` and `end`, as timezone-aware datetimes. It yields the calls that started at or after `start` and before `end`, newest first. A call at exactly `end` is left out, so consecutive ranges never miss or repeat a call. A local day runs from its midnight to the next midnight, in any time zone:
 
 ```python
 from datetime import datetime, timedelta
@@ -73,13 +75,13 @@ rejected = list(client.calls.list(start=day, result=CallResult.REJECTED))
 
 If you keep your own copy of the call log, it changes after the fact:
 
-- Calls rebuilt from the phone carrier's records, with `imported` set, can appear up to 48 hours after they started, in their `started_at` place, and later than that after an API outage.
+- Calls rebuilt from the phone carrier's records, with `imported` set, can appear up to 48 hours after they started (longer after an API outage), listed by `started_at`, not by when they appeared.
 - A call whose `result` is `in_progress` gets its final result when it ends.
 - A call's other details can change too, so match calls by `uuid`.
 
 ## Creating
 
-`codes.create()` takes an [`AccessCodeCreate`][yama.models.AccessCodeCreate]. Building it, or the `AccessCodeUpdate` below, raises `pydantic.ValidationError`, before anything is sent, for an unknown field or a datetime without a time zone. Rules about values, such as how many digits a code has, are left to the API.
+`codes.create()` takes an [`AccessCodeCreate`][yama.models.AccessCodeCreate]. Request models check fields and types as you build them (see [What a call raises](errors.md#what-a-call-raises)), and leave rules about values, such as how many digits a code has, to the API.
 
 ```python
 from datetime import datetime, timezone
@@ -102,15 +104,11 @@ A create is safe to repeat with the same idempotency key; see [Creates that are 
 ```python
 from yama import AccessCodeUpdate
 
+code = client.codes.update(code.uuid, AccessCodeUpdate(name="Cleaner (Mon-Fri)"))
 code = client.codes.update(code.uuid, AccessCodeUpdate(expires_at=None))  # never expires
 ```
 
-`codes.replace()` takes a whole `AccessCodeCreate`. To replace a code with a changed copy of itself, build one from the fetched code with only the fields `AccessCodeCreate` takes. Listing them with `include` keeps this working when the API adds fields to responses, which the request model would reject:
-
-```python
-fields = code.model_dump(include=set(AccessCodeCreate.model_fields))
-client.codes.replace(code.uuid, AccessCodeCreate(**{**fields, "name": "Cleaner (Mon-Fri)"}))
-```
+`codes.replace()` takes a whole `AccessCodeCreate`; leaving `expires_at` unset keeps the current expiry.
 
 ## Deleting
 
