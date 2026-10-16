@@ -15,7 +15,6 @@ from yama import DEFAULT_BASE_URL, Yama, YamaError
 @pytest.fixture(autouse=True)
 def _clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("YAMA_API_KEY", raising=False)
-    monkeypatch.delenv("YAMA_API_BASE_URL", raising=False)
 
 
 def _transport_client(handler: object) -> httpx.Client:
