@@ -23,7 +23,7 @@ classifiers = [
 
 [project.urls]
 Homepage = "https://yamasystems.com"
-Documentation = "https://yass-ltd.github.io/yama-python/"
+Documentation = "https://python.yamasystems.com/"
 Source = "https://github.com/YASS-Ltd/yama-python"
 Issues = "https://github.com/YASS-Ltd/yama-python/issues"
 "Release notes" = "https://github.com/YASS-Ltd/yama-python/releases"
