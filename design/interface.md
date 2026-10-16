@@ -103,12 +103,14 @@ Use: `Yama(api_key="test", http_client=httpx.Client(transport=fake_transport()))
 
 ```
 YamaError                       # base; also raised for misconfiguration (CFG-2)
-├── APIConnectionError          # network failure or timeout, after retries
+├── APIConnectionError          # network failure, after retries; nothing may have been sent
+│   └── APITimeoutError         # a request attempt timed out, after retries; it may have been processed
 └── APIStatusError              # any other non-2xx: status_code, detail, body, api_version
     ├── BadRequestError         # 400; .errors: dict[str, list[str]]
     ├── AuthenticationError     # 401
     ├── PermissionDeniedError   # 403
     ├── NotFoundError           # 404
+    ├── ConflictError           # 409: in v0.1, an idempotency key still being processed
     ├── RateLimitError          # 429; .retry_after: int | None (seconds)
     └── ServerError             # 5xx
 ```

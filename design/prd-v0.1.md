@@ -55,7 +55,7 @@ Written in [EARS](https://alistairmavin.com/ears/) form: each is one testable se
 
 - **ERR-1** When the API returns a non-2xx status, the client shall raise the `APIStatusError` subclass for that status, carrying the status code, the body's `detail`, the parsed body and the `API-Version` header.
 - **ERR-2** When the API returns 400, the client shall expose its map of keys to messages on the error. Keys name body fields or query parameters, and may include keys that aren't fields at all, such as `non_field_errors`.
-- **ERR-3** If a request still fails at the network level after its retries, then the client shall raise `APIConnectionError`.
+- **ERR-3** If a request still fails at the network level after its retries, then the client shall raise `APIConnectionError`, or its subclass `APITimeoutError` when the last attempt timed out.
 - **ERR-4** The client shall raise only `YamaError` subclasses for failed calls, and `TypeError` or `ValueError` for invalid arguments.
 - **ERR-5** The client's exceptions shall survive a pickle round trip with their fields intact.
 
