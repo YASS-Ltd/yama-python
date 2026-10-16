@@ -54,4 +54,8 @@ rejected = list(client.calls.list(start=day, result=CallResult.REJECTED))
 - With a `start`, polling for recent calls is cheap.
 - Each call comes once, even when new calls arrive while you iterate.
 
-To keep your own copy of the call log up to date, follow the [call-log sync recipe](web-apps-and-jobs.md#syncing-the-call-log).
+If you keep your own copy of the call log, it changes after the fact:
+
+- Calls rebuilt from the phone carrier's records, with `imported` set, can appear up to 48 hours after they started, in their `started_at` place, and later than that after an API outage.
+- A call whose `result` is `in_progress` gets its final result when it ends.
+- A call's other details can change too, so match calls by `uuid`.

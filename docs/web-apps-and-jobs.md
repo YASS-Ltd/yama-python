@@ -140,38 +140,3 @@ def new_code(request, unit):
             form.data["idempotency_key"] = str(uuid.uuid4())  # corrected data, new key
     return render(request, "new_code.html", {"form": form})
 ```
-
-## Syncing the call log
-
-To keep your own copy of the call log, sync it on a schedule with overlapping ranges:
-
-- **Start each sync at least 48 hours before the last one ended.** Some calls are added to the log afterwards, rebuilt from the phone carrier's records (these have `imported` set). They appear in their `started_at` place, which a sync starting where the last one ended has already passed.
-- **Upsert by `uuid`.** Overlapping ranges return calls you already have, and a call's details can change.
-- **Fetch in-progress calls again later.** A call whose `result` is `in_progress` gets its final result when it ends; `calls.get(uuid)` returns it.
-- **Re-sync a wider range after a long API outage.** Calls from during the outage can be rebuilt later than usual, so once the API is back, run one sync starting 48 hours before the outage began.
-- **Use timezone-aware datetimes.** Ranges are half-open, `start <= started_at < end`, so take `end` once per sync and save it as the next sync's reference point.
-
-```python
-from datetime import datetime, timedelta, timezone
-from uuid import UUID
-
-from yama import CallLogEntry, CallResult
-
-OVERLAP = timedelta(hours=48)
-calls: dict[UUID, CallLogEntry] = {}  # your database table, keyed by uuid
-
-
-def sync_calls(last_end: datetime) -> datetime:
-    """Sync from 48 hours before `last_end` to now, and return the new end to save."""
-    client = yama_client()
-    end = datetime.now(timezone.utc)
-    for call in client.calls.list(start=last_end - OVERLAP, end=end):
-        calls[call.uuid] = call  # upsert
-    for uuid, call in list(calls.items()):
-        if call.result == CallResult.IN_PROGRESS:
-            calls[uuid] = client.calls.get(uuid)
-    return end
-
-
-last_end = sync_calls(datetime(2026, 10, 9, tzinfo=timezone.utc))
-```
