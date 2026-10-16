@@ -37,6 +37,15 @@ Four issues, in order. Each is small enough for one person or agent to finish an
 3. **Resources:** every operation in the audit below, each a thin method over the core: the API key, buildings, units, contacts, access codes (including clearing `expires_at`), and the call log with `uuid` de-duplication.
 4. **Release 0.1.0:** README quick start, the branded Zensical docs site, `just release`, the publish workflow, and the first release to PyPI.
 
+## API Prerequisites
+
+0.1.0 waits on these API changes, handed off to django-poc:
+
+1. **The new host:** the API served on `app.yamasystems.com`.
+2. **Idempotency keys:** `POST /api/v2/codes/` honours an `Idempotency-Key` header, so the client can retry creates safely.
+
+Work on the client doesn't wait for them: it's built and tested against the current host and the in-memory fake.
+
 ## Current-State Audit
 
 The vendored schema is the complete list of operations and filters; this table is a summary. Checked against django-poc on 2026-10-15 (release 2026.10.6, `docs/api/reference.md` and `docs/api/getting-started.md`):
@@ -68,7 +77,7 @@ Correction to earlier notes: django-poc TASK-243 mentioned a separate `before` +
 - MIT licence.
 - Hand-written client whose interface takes and returns Pydantic v2 models.
 - Enum values the client doesn't know pass through as strings.
-- Default base URL `https://app.getyama.ca`, overridden by the `base_url` argument or `YAMA_API_BASE_URL`.
+- Default base URL `https://app.yamasystems.com`, overridden by the `base_url` argument or `YAMA_API_BASE_URL`.
 - Python 3.10 and newer, with a policy for dropping old versions (see engineering foundations).
 
 ## Open Questions

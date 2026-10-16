@@ -70,18 +70,19 @@ The published OpenAPI schema is vendored as `tests/fixtures/openapi.yaml`. The c
 
 ## Yama's Domain
 
-Yama's main domain will move from `getyama.ca` to `yamasystems.com`. The client should survive that without breaking installed versions:
+Yama is moving from `getyama.ca` to `yamasystems.com` now, while no integration depends on the old host. The client targets the new host from its first release and never the old one:
 
-- The code names the domain once, in `DEFAULT_BASE_URL`. `YAMA_API_BASE_URL` and the `base_url` argument override it, so integrators can switch before a release does.
-- Installed clients keep calling the old host, so the API has to keep answering on `app.getyama.ca` for a long transition, ideally at least a year. Answering means serving the API, not redirecting: httpx doesn't follow redirects by default, a redirected `POST` can turn into a `GET`, and a redirect to another host drops the `Authorization` header.
-- When the new host is live, a minor release changes `DEFAULT_BASE_URL`, re-vendors the schema (its `servers` entry changes) and updates the links in the README, `pyproject.toml`, the `justfile` and the issue template config. The changelog tells integrators who pin the old host to switch.
+- `DEFAULT_BASE_URL` is `https://app.yamasystems.com` (host to be confirmed) and is the only place in the code that names the domain. `YAMA_API_BASE_URL` and the `base_url` argument override it.
+- 0.1.0 isn't released until the API answers on the new host. Until then, development and live tests point `YAMA_API_BASE_URL` at the current host, and the vendored schema comes from it.
+- When the new host is live, one change switches the `justfile`'s schema URL, re-vendors the schema, and updates the links in the README, `pyproject.toml`, the issue template config and the docs.
+- The old host can redirect or be retired on the API's own schedule; no released client calls it.
 
 ## Testing Strategy
 
 - **Tests first:** write a failing test, then the minimum code to pass, then refactor.
 - **Unit tests** mock single HTTP exchanges with respx. They cover each operation's request (method, path, query, body), response parsing, pagination edge cases (empty list, one page, many pages, a `next` that repeats a call), the error mapping for each status, and retry behaviour, using a fake clock so tests don't sleep.
 - **Contract tests** check the client against the vendored schema: every operation in the schema has a client method, and every request the client builds validates against the schema.
-- **An in-memory fake API** built on `httpx.MockTransport`, with no server or process. It holds a few made-up buildings, units, contacts, codes and calls in dicts and implements the real behaviours: `limit`/`offset` with `next` links, code create, update and delete, a 400 naming an unknown field, a 404, and a 429 with `Retry-After` on demand. Every response it returns is validated against the vendored schema, so the fake can't drift from the contract unnoticed. One scenario test drives the client through every operation an integrator uses, end to end, in milliseconds.
+- **An in-memory fake API** built on `httpx.MockTransport`, with no server or process. It holds a few made-up buildings, units, contacts, codes and calls in dicts and implements the real behaviours: `limit`/`offset` with `next` links, code create (honouring `Idempotency-Key`), update and delete, a 400 naming an unknown field, a 404, and a 429 with `Retry-After` on demand. Every response it returns is validated against the vendored schema, so the fake can't drift from the contract unnoticed. One scenario test drives the client through every operation an integrator uses, end to end, in milliseconds.
 - **Live tests** (`just test-live <base-url>`) run the same scenario against a real Yama API, normally a local django-poc checkout with seed data, and are skipped when no base URL and key are given. They never run in CI. They're a step in every release, as the last check that the client works against the real server. The client talks to it only over HTTP, as an integrator would; nothing from django-poc is copied here.
 - **No production calls** in tests, CI or live tests.
 - **Fixtures** use made-up data shaped like the integrator guide's examples. Never commit real API responses: they hold customer phone numbers and names.

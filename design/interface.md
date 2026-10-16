@@ -50,7 +50,7 @@ Yama(
 ```
 
 - No key from either source raises `YamaError` at construction.
-- `DEFAULT_BASE_URL` (in `_client.py`, currently `https://app.getyama.ca`) is the only place in the code that names Yama's domain.
+- `DEFAULT_BASE_URL` (in `_client.py`, `https://app.yamasystems.com`) is the only place in the code that names Yama's domain.
 - `Yama` is a context manager and has `close()`. It closes the `httpx.Client` only if it created it.
 - Attributes: `api_key`, `buildings`, `units`, `contacts`, `codes`, `calls` (resources, below). The key string itself is private (`_key`) and appears in no `repr`, log line, exception or URL.
 - Every request sends `Authorization: Bearer <key>`, `Accept: application/json` and `User-Agent: yama-python/<version> python/<major.minor>`.
@@ -70,7 +70,7 @@ Paths are relative to `/api/v2/`. `uuid` parameters accept `UUID | str`. Filters
 | `contacts.get(uuid)` | `GET contacts/{uuid}/` | `Contact` |
 | `codes.list(*, unit, code, name, search, page_size)` | `GET codes/` | `Paginator[AccessCode]` |
 | `codes.get(uuid)` | `GET codes/{uuid}/` | `AccessCode` |
-| `codes.create(data: AccessCodeCreate)` | `POST codes/` | `AccessCode` |
+| `codes.create(data: AccessCodeCreate, *, idempotency_key)` | `POST codes/` | `AccessCode` |
 | `codes.replace(uuid, data: AccessCodeCreate)` | `PUT codes/{uuid}/` | `AccessCode` |
 | `codes.update(uuid, data: AccessCodeUpdate)` | `PATCH codes/{uuid}/` | `AccessCode` |
 | `codes.delete(uuid)` | `DELETE codes/{uuid}/` | `None` |
@@ -79,6 +79,7 @@ Paths are relative to `/api/v2/`. `uuid` parameters accept `UUID | str`. Filters
 
 - `page_size: int | None` is sent as `limit` (1-500; the API defaults to 100). There is no `offset` argument: the paginator follows `next`.
 - `calls.list`: `start` and `end` are `datetime.date`s, sent as ISO dates, and go together: passing only one raises `ValueError` before any request. Without them the API returns the last 30 days. The paginator skips any call whose `uuid` it has already yielded, because new calls shift pages while you read.
+- `codes.create` sends an `Idempotency-Key` header: `idempotency_key: str | None` if given, otherwise a fresh `uuid4`, kept the same across retries of that call. Pass your own key to make a create safe to repeat across process restarts, such as one derived from a record in your system.
 - `codes.update` sends only the fields set on the model (`model_dump(exclude_unset=True)`), so `AccessCodeUpdate(expires_at=None)` clears the expiry and `AccessCodeUpdate(name="Cleaner")` leaves it alone.
 
 ## Pagination
@@ -126,7 +127,7 @@ YamaError                       # base; also raised for client misconfiguration
 
 - Retried: 429, 5xx, and `httpx.TransportError`, up to `max_retries` times.
 - Wait: a 429's `Retry-After` when present. Otherwise exponential backoff with jitter, starting at 0.5 s and capped at 8 s. A `Retry-After` over 60 s isn't waited out: the client raises `RateLimitError` straight away.
-- `POST` (creating a code) is retried only on 429 and on connection errors raised before the request was sent (`httpx.ConnectError`, `httpx.ConnectTimeout`). After a 5xx or a read timeout the code may or may not exist, and retrying could create it twice, so the client raises instead, and the error's message says the code may have been created. Once the API accepts an idempotency key, the client will send one with every create and retry it like any other request.
+- Every method retries the same way, `codes.create` included, because its `Idempotency-Key` makes a repeated create return the first result instead of making a second code. This depends on the API's idempotency support (see the PRD); 0.1.0 doesn't ship without it.
 - Waiting goes through `Yama._sleep` (default `time.sleep`), so tests replace it rather than sleep.
 
 ## Out of Scope for v0.1

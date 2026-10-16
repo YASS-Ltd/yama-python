@@ -39,7 +39,7 @@ API conventions the client must handle:
 - MIT licence.
 - A hand-written client whose interface takes and returns Pydantic v2 models.
 - Enum values the client doesn't know pass through as strings.
-- Default base URL `https://app.getyama.ca`, overridden by the `base_url` argument or `YAMA_API_BASE_URL`.
+- Default base URL `https://app.yamasystems.com` (Yama is moving off `getyama.ca`; see `design/engineering-foundations.md`), overridden by the `base_url` argument or `YAMA_API_BASE_URL`.
 - Python 3.10 and newer (policy in `design/engineering-foundations.md`).
 - A copy of the OpenAPI schema lives in this repo as a test fixture, and CI flags drift from the published schema.
 
