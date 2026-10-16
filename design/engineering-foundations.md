@@ -82,7 +82,7 @@ Requirements live in the PRD, written in [EARS](https://alistairmavin.com/ears/)
 - A requirement describes behaviour an integrator can observe. Implementation choices, such as backoff timings or module layout, aren't requirements; they live in the interface spec's defaults, the code and its docstrings.
 - Use the five EARS patterns: *The client shall…*, *When <trigger>, the client shall…*, *While <state>, the client shall…*, *If <condition>, then the client shall…*, *Where <feature>, the client shall…*. One sentence, one behaviour.
 - Behaviour is written down once. If a requirement and another doc disagree, the requirement wins; fix the other doc.
-- IDs are never reused. A dropped requirement is struck through, not renumbered.
+- To drop a requirement, delete it. Its ID isn't reused, so old test names and references never point at something else.
 
 ## Testing Strategy
 

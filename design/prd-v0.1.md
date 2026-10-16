@@ -82,7 +82,6 @@ Written in [EARS](https://alistairmavin.com/ears/) form: each is one testable se
 - **PAG-1** When the caller iterates a list, the client shall yield every item on every page, following each `next` URL as given until it is null.
 - **PAG-2** The client shall send no request for a list until the caller starts iterating it.
 - **PAG-3** Where the caller sets `page_size`, the client shall send it as `limit`.
-- ~~**PAG-4** The client shall let the caller iterate a list page by page.~~ Dropped: pages are machinery the client hides. A total count can be added later if integrators need it.
 
 ### Call log (CALL)
 
