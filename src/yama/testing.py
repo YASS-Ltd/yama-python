@@ -8,7 +8,8 @@
 
 The fake holds a few made-up buildings, units, contacts, access codes and calls, and behaves
 like the real API: lists page with `limit`, `offset` and `next`, and take the same filters;
-access codes can be created, replaced, updated and deleted; bad input gets the same 400s, and
+access codes can be created, replaced, updated and deleted; bad input, such as an expiry in
+the past (other than a code's current one, sent back), gets the same 400s, and
 a missing object a 404. A create repeating an `Idempotency-Key` replays the first answer, or
 gets a 422 when its body differs, or a 410 when the code it created has since been deleted.
 Any key works, except `rate-limited`, which gets a 429 with a `Retry-After` longer than the
@@ -139,7 +140,13 @@ _DATA: dict[str, list[dict[str, Any]]] = {
             "name": "Visitor",
             "expires_at": "2099-12-31T00:00:00Z",
         },
-        {"uuid": _id(43), "unit": U3, "code": "2468", "name": None, "expires_at": None},
+        {
+            "uuid": _id(43),
+            "unit": U3,
+            "code": "2468",
+            "name": None,
+            "expires_at": "2020-01-01T00:00:00Z",
+        },
     ],
     "calls": [
         _call(51, U1, B1, "2026-10-10T22:09:11Z", "code_accepted", "Primary · Accepted"),
@@ -293,6 +300,14 @@ class _FakeAPI:
         code = body.get("code", "000")
         if not (isinstance(code, str) and code.isdigit() and 3 <= len(code) <= 15):
             errors["code"] = ["Enter 3 to 15 digits."]
+        try:
+            expiry = _instant(body.get("expires_at"))
+            # A code's current expiry, sent back unchanged, is accepted even once it has passed.
+            current_expiry = _instant((current or {}).get("expires_at"))
+            if expiry and expiry <= datetime.now(timezone.utc) and expiry != current_expiry:
+                errors["expires_at"] = ["Expiry must be in the future."]
+        except ValueError:
+            errors["expires_at"] = ["Enter a valid date and time."]
         new = {"uuid": str(uuid.uuid4()), "name": None, "expires_at": None, **(current or {})}
         new |= body
         if not errors and any(
@@ -304,6 +319,15 @@ class _FakeAPI:
             return _json(400, errors)
         self._data["codes"][new["uuid"]] = new
         return _json(201 if current is None else 200, new)
+
+
+def _instant(value: object) -> datetime | None:
+    """An ISO 8601 time as an aware datetime (UTC if it has no offset), or None for None.
+    Raises `ValueError` for anything else."""
+    if value is None:
+        return None
+    when = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    return when if when.tzinfo else when.replace(tzinfo=timezone.utc)
 
 
 def _date_range(

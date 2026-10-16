@@ -233,7 +233,9 @@ def test_rty_7_retries_any_method_when_the_api_never_ran_the_request(
 
 
 @pytest.mark.parametrize(
-    "failure", [respond(503), httpx.ReadTimeout("slow")], ids=["503", "timeout"]
+    "failure",
+    [respond(503), httpx.ReadTimeout("slow"), httpx.ReadError("reset")],
+    ids=["503", "timeout", "read"],
 )
 def test_rty_8_treats_a_404_on_a_retried_delete_as_done(
     failure: httpx.Response | Exception,
@@ -242,6 +244,28 @@ def test_rty_8_treats_a_404_on_a_retried_delete_as_done(
     client, _ = make_client(handler)
     client.codes.delete(UNIT)  # no NotFoundError
     assert len(requests) == 2
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [respond(429), httpx.ConnectError("refused"), httpx.PoolTimeout("busy")],
+    ids=["429", "connect", "pool-timeout"],
+)
+def test_rty_8_raises_not_found_when_no_earlier_attempt_can_have_run(
+    failure: httpx.Response | Exception,
+) -> None:
+    handler, requests = recorder(failure, respond(404, {"detail": "Not found."}))
+    client, _ = make_client(handler)
+    with pytest.raises(NotFoundError):
+        client.codes.delete(UNIT)
+    assert len(requests) == 2
+
+
+def test_rty_8_a_404_after_a_429_that_follows_a_5xx_counts_as_done() -> None:
+    handler, requests = recorder(respond(503), respond(429), respond(404, {"detail": "Not found."}))
+    client, _ = make_client(handler)
+    client.codes.delete(UNIT)
+    assert len(requests) == 3
 
 
 def test_rty_8_a_delete_whose_first_attempt_gets_a_404_raises_not_found() -> None:

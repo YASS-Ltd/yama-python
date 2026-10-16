@@ -86,7 +86,7 @@ Paths are relative to `/api/v2/`. `uuid` parameters accept `UUID | str`. Filters
 
 A `uuid`, or a UUID filter such as `building` or `unit`, that isn't a valid UUID raises `ValueError` without sending a request. Filters take `str`, or `UUID` and enum members where the schema says so. An `idempotency_key` must be 1 to 255 printable ASCII characters without spaces (the API's limit), or `codes.create` raises `ValueError` without sending.
 
-Every time the client takes or returns is a timezone-aware `datetime` (MOD-1, MOD-4). `calls.list` takes the range `start <= started_at < end` (CALL-4, CALL-5), so one local day is midnight to the next midnight in any zone; it sends the API the whole UTC dates covering it and drops the calls outside it.
+Every time the client takes or returns is a timezone-aware `datetime` (MOD-1, MOD-4). `calls.list` takes the range `start <= started_at < end` (CALL-4 to CALL-6), so one local day is midnight to the next midnight in any zone; it sends the API the whole UTC dates covering it and drops the calls outside it.
 
 Lists take no `limit` or `offset`: the iterator requests pages itself and follows `next` (PAG-1).
 
@@ -132,7 +132,7 @@ An `APIStatusError`'s message is `"<status> <detail> (<method> <path>)"`, such a
 
 ## Implementation Defaults
 
-Choices that aren't requirements, recorded so they're consistent: every list requests the API's maximum page size (`limit=500`), for the fewest requests under the rate limit. An open `start` is sent as `2000-01-01` (CALL-2); the live tests confirm the API accepts it. The call log's de-duplication remembers the last 1,000 UUIDs it yielded, two pages (CALL-1). Backoff starts at 0.5 s, doubles, is capped at 8 s, with full jitter. Retries depend on the method (RTY-7): a 429, or a failure to connect (`httpx.ConnectError`, `ConnectTimeout`, `PoolTimeout`), means the API never ran the request, so every method retries it; any other failure is retried for every method except a POST without an `Idempotency-Key`, which the client never sends. A retried DELETE that gets a 404 returns as done (RTY-8).
+Choices that aren't requirements, recorded so they're consistent: every list requests the API's maximum page size (`limit=500`), for the fewest requests under the rate limit. An open `start` is sent as `2000-01-01` (CALL-2); the live tests confirm the API accepts it. The call log's de-duplication remembers the last 1,000 UUIDs it yielded, two pages (CALL-1). Backoff starts at 0.5 s, doubles, is capped at 8 s, with full jitter. Retries depend on the method (RTY-7): a 429, or a failure to connect (`httpx.ConnectError`, `ConnectTimeout`, `PoolTimeout`), means the API never ran the request, so every method retries it; any other failure is retried for every method except a POST without an `Idempotency-Key`, which the client never sends. A retried DELETE that gets a 404 returns as done, unless every earlier attempt got a 429 or failed to connect (RTY-8).
 
 Async isn't in v0.1, but the core is shaped so an `AsyncYama` is a small, non-breaking addition later: only sending and sleeping touch I/O.
 

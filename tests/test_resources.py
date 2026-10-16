@@ -274,6 +274,14 @@ def test_code_4_puts_the_idempotency_key_sent_on_a_failed_create(
     assert key is None or caught.value.idempotency_key == key
 
 
+def test_code_4_puts_the_idempotency_key_on_a_create_whose_response_does_not_parse() -> None:
+    handler, requests = recorder(respond(201, {"unexpected": True}))
+    client, _ = make_client(handler)
+    with pytest.raises(YamaError) as caught:
+        client.codes.create(AccessCodeCreate(unit=UNIT, code="4321"))
+    assert caught.value.idempotency_key == requests[0].headers["Idempotency-Key"]
+
+
 def test_code_4_other_calls_leave_idempotency_key_none() -> None:
     handler, _ = recorder(respond(404, {"detail": "Not found."}))
     client, _ = make_client(handler)
@@ -342,14 +350,14 @@ UTC = timezone.utc
 def test_call_2_treats_omitted_times_as_an_open_range() -> None:
     handler, requests = recorder(page())
     client, _ = make_client(handler)
-    today = datetime.now(UTC).date().isoformat()
+    tomorrow = (datetime.now(UTC) + timedelta(days=1)).date().isoformat()
     list(client.calls.list())
     list(client.calls.list(start=datetime(2026, 10, 1, tzinfo=UTC)))
     list(client.calls.list(end=datetime(2026, 11, 1, tzinfo=UTC)))
     ranges = [(r.url.params["start"], r.url.params["end"]) for r in requests]
     assert ranges == [
-        ("2000-01-01", today),
-        ("2026-10-01", today),
+        ("2000-01-01", tomorrow),
+        ("2026-10-01", tomorrow),
         ("2000-01-01", "2026-10-31"),
     ]
 
@@ -441,3 +449,13 @@ def test_call_5_rejects_a_date_or_naive_datetime_without_sending(name: str) -> N
     with pytest.raises(ValueError, match="aware"):
         client.calls.list(**{name: datetime(2026, 10, 1)})  # type: ignore[arg-type]
     assert requests == []
+
+
+def test_call_6_rejects_an_end_before_start_without_sending() -> None:
+    handler, requests = recorder(page())
+    client, _ = make_client(handler)
+    start = datetime(2026, 10, 2, tzinfo=UTC)
+    with pytest.raises(ValueError, match="end"):
+        client.calls.list(start=start, end=start - timedelta(microseconds=1))
+    assert requests == []
+    assert list(client.calls.list(start=start, end=start)) == []  # empty, but valid

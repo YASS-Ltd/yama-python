@@ -178,6 +178,33 @@ def test_test_1_rejects_a_code_the_unit_already_has(api: httpx.Client) -> None:
         assert response.json() == {"code": ["Access code already exists for this unit."]}
 
 
+def test_test_1_rejects_an_expiry_in_the_past(api: httpx.Client) -> None:
+    existing = everything(api, "codes/")[0]
+    url = f"codes/{existing['uuid']}/"
+    past = {"expires_at": "2020-01-01T00:00:00Z"}
+    body = {"unit": existing["unit"], "code": "24680", **past}
+    for response in (
+        api.post("codes/", json=body),
+        api.put(url, json=body),
+        api.patch(url, json=past),
+    ):
+        assert response.status_code == 400
+        assert response.json() == {"expires_at": ["Expiry must be in the future."]}
+
+
+def test_test_1_accepts_a_codes_current_expiry_sent_back_after_it_passed(
+    api: httpx.Client,
+) -> None:
+    expired = next(
+        c for c in everything(api, "codes/") if c["expires_at"] == "2020-01-01T00:00:00Z"
+    )
+    url = f"codes/{expired['uuid']}/"
+    fields = {k: v for k, v in expired.items() if k != "uuid"}
+    assert api.put(url, json=fields).status_code == 200
+    assert api.patch(url, json={"expires_at": "2020-01-01T00:00:00+00:00"}).status_code == 200
+    assert api.patch(url, json={"expires_at": "2020-01-02T00:00:00Z"}).status_code == 400
+
+
 def test_test_1_requires_unit_and_code_to_create(api: httpx.Client) -> None:
     response = api.post("codes/", json={"name": "No code"})
     assert response.status_code == 400

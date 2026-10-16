@@ -331,6 +331,7 @@ class Yama:
             timeout=self._timeout,
         )
         attempt = 0
+        may_have_run = False  # whether an earlier attempt may have reached the API (RTY-8)
         while True:
             attempt += 1
             started = time.monotonic()
@@ -356,12 +357,17 @@ class Yama:
             if response is not None:
                 if response.is_success:
                     return _success(request, response)
-                if attempt > 1 and request.method == "DELETE" and response.status_code == 404:
+                if may_have_run and request.method == "DELETE" and response.status_code == 404:
                     return None  # an earlier attempt deleted it (RTY-8)
                 error = _status_error(request, response)
             wait = _retry_wait(attempt, self._max_retries, request, result)
             if wait is None:
                 raise error
+            # A 429 or a failure to connect means the API never ran it; anything else retried may.
+            may_have_run |= not (
+                isinstance(result, _NOT_SENT)
+                or (response is not None and response.status_code == 429)
+            )
             _log(
                 logging.INFO,
                 "Retrying %(method)s %(path)s in %(wait).2fs (attempt %(attempt)d) "

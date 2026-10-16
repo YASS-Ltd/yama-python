@@ -167,7 +167,9 @@ class Codes(_Resource):
         different UTC offset is different data. For a web form, generate the key when you
         render the form and carry it in a hidden field, which also makes a double submit safe.
         The API remembers a key for 24 hours. It remembers a 400 too and replays it for that
-        key, so send corrected data with a new key.
+        key, so send corrected data with a new key: when you show the form again after a 400,
+        replace the hidden key with a new one (a bound Django form re-renders the posted value),
+        or the corrected submit raises `UnprocessableEntityError`.
 
         When the create fails, the error's `idempotency_key` is the key that was sent, even one
         the client generated, so you can retry with it.
@@ -197,10 +199,10 @@ class Codes(_Resource):
             response = self._client._request(
                 "POST", "codes/", json=body, headers={"Idempotency-Key": key}
             )
+            return parse(AccessCode, response)
         except YamaError as error:
             error.idempotency_key = key  # so the caller can retry it (CODE-4)
             raise
-        return parse(AccessCode, response)
 
     def replace(self, uuid: UUID | str, data: AccessCodeCreate) -> AccessCode:
         """Replace an access code. Leaving `expires_at` unset keeps the current expiry, and
@@ -245,14 +247,17 @@ class Calls(_Resource):
 
         Raises:
             TypeError: `start` or `end` is a `date`, or anything else but a `datetime`.
-            ValueError: `start` or `end` has no time zone.
+            ValueError: `start` or `end` has no time zone, or `end` is before `start`.
         """
         start, end = _aware("start", start), _aware("end", end)
+        if start is not None and end is not None and end < start:
+            raise ValueError("end must not be before start.")
         # The API takes whole UTC dates: those of `start` and of the last instant before `end`.
+        # An open end sends tomorrow, in case this clock is a little behind the API's at midnight.
         utc = timezone.utc
         first = _EARLIEST if start is None else start.astimezone(utc).date()
         last = (
-            datetime.now(utc).date()
+            (datetime.now(utc) + timedelta(days=1)).date()
             if end is None
             else (end.astimezone(utc) - timedelta(microseconds=1)).date()
         )
@@ -277,8 +282,10 @@ class Calls(_Resource):
 def _unique(calls: Iterator[CallLogEntry]) -> Iterator[CallLogEntry]:
     """`calls` without any whose `uuid` was yielded within the last two pages (CALL-1).
 
-    Calls are never deleted, so a call repeats only when new ones push it onto the next page;
-    remembering two pages' worth keeps memory bounded on a sync of all history.
+    New calls arriving push older ones onto the next page, where they would repeat; this
+    window skips those while keeping memory bounded. Calls dropping out (a unit deactivated,
+    or access lost) shift pages the other way, so later calls can be skipped, which no
+    de-duplication can fix. Paging a range that has already ended avoids both.
     """
     recent: deque[UUID] = deque()
     seen: set[UUID] = set()
