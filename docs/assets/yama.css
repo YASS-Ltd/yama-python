@@ -1,0 +1,36 @@
+/* Yama's colours: Dark Forest #21212b and Clay Rose #e3c8bd. */
+:root {
+  --yama-forest: #21212b;
+  --yama-clay: #e3c8bd;
+  --yama-clay-deep: #8c5a4a; /* Clay Rose, darkened to read as text on white */
+}
+
+[data-md-color-primary="custom"] {
+  --md-primary-fg-color: var(--yama-forest);
+  --md-primary-fg-color--light: #3a3a48;
+  --md-primary-fg-color--dark: #16161d;
+  --md-primary-bg-color: var(--yama-clay);
+  --md-primary-bg-color--light: #e3c8bdb3;
+}
+
+[data-md-color-accent="custom"] {
+  --md-accent-fg-color: var(--yama-clay-deep);
+  --md-accent-fg-color--transparent: #8c5a4a1a;
+}
+
+[data-md-color-scheme="default"] {
+  --md-typeset-a-color: var(--yama-clay-deep);
+}
+
+[data-md-color-scheme="slate"] {
+  --md-hue: 240;
+  --md-default-bg-color: var(--yama-forest);
+  --md-typeset-a-color: var(--yama-clay);
+  --md-accent-fg-color: var(--yama-clay);
+  --md-accent-fg-color--transparent: #e3c8bd1a;
+}
+
+/* The wordmark is wide: give it room in the header. */
+.md-header__button.md-logo img {
+  height: 1rem;
+}

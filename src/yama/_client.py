@@ -210,6 +210,19 @@ class Yama:
         ValueError: The API key isn't printable ASCII without spaces, once stripped.
     """
 
+    api_key: ApiKeyResource
+    """The API key the client uses: what it may do."""
+    buildings: Buildings
+    """Your buildings."""
+    units: Units
+    """Your units."""
+    contacts: Contacts
+    """The contacts on your units."""
+    codes: Codes
+    """The access codes on your units."""
+    calls: Calls
+    """The call log."""
+
     def __init__(
         self,
         api_key: str | None = _OMITTED,
@@ -244,17 +257,11 @@ class Yama:
 
     def _attach(self) -> None:
         self.api_key = ApiKeyResource(self)
-        """The API key the client uses: what it may do."""
         self.buildings = Buildings(self)
-        """Your buildings."""
         self.units = Units(self)
-        """Your units."""
         self.contacts = Contacts(self)
-        """The contacts on your units."""
         self.codes = Codes(self)
-        """The access codes on your units."""
         self.calls = Calls(self)
-        """The call log."""
 
     def with_options(
         self,

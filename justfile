@@ -41,7 +41,7 @@ typecheck:
 
 # Everything CI runs
 [group('qa')]
-check: lint typecheck test build
+check: lint typecheck test build docs-build
 
 # Build the sdist and wheel, then import the wheel in a clean environment
 [group('release')]
@@ -49,6 +49,16 @@ build:
     rm -rf dist
     uv build
     uv run --isolated --no-project --with dist/*.whl python -c "import yama; print('yama', yama.__version__)"
+
+# Serve the docs at http://localhost:8000, rebuilding on changes
+[group('docs')]
+docs:
+    uv run zensical serve
+
+# Build the docs into site/, failing on any warning, such as a broken link
+[group('docs')]
+docs-build:
+    uv run zensical build --strict --clean
 
 # Show how the published schema differs from the vendored copy
 [group('schema')]

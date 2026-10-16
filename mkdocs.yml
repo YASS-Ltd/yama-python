@@ -1,0 +1,85 @@
+# The docs site, built with Zensical (`just docs`). Material for MkDocs reads the same file.
+site_name: yama-python
+site_description: The official Python client for the Yama access-control API.
+site_url: https://yass-ltd.github.io/yama-python/
+repo_url: https://github.com/YASS-Ltd/yama-python
+repo_name: YASS-Ltd/yama-python
+copyright: Copyright &copy; Yama Access Software Systems Ltd. MIT licence.
+
+nav:
+  - Home: index.md
+  - Guide:
+      - Configuration: configuration.md
+      - Lists and the call log: pagination.md
+      - Models: models.md
+      - Errors and retries: errors.md
+      - Logging: logging.md
+      - Testing: testing.md
+      - Web apps and background jobs: production.md
+      - Versioning: versioning.md
+  - Reference: reference.md
+  - Changelog: changelog.md
+
+theme:
+  name: material
+  variant: classic  # Zensical: the header in the primary colour, as in Material
+  logo: assets/yama-logo-dark.svg
+  favicon: assets/yama-icon.svg
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - content.code.copy
+    - navigation.footer
+    - navigation.sections
+    - search.highlight
+
+extra_css:
+  - assets/yama.css
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - toc:
+      permalink: true
+  - pymdownx.highlight
+  - pymdownx.superfences
+  - pymdownx.snippets:
+      check_paths: true
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [src]
+          options:
+            docstring_style: google
+            show_source: false
+            heading_level: 3
+            show_root_heading: true
+            show_root_full_path: false
+            show_signature_annotations: true
+            separate_signature: true
+            members_order: source
+            merge_init_into_class: true
+            show_if_no_docstring: false
+            filters: ["!^_"]
+
+validation:
+  omitted_files: warn
+  absolute_links: warn
+  unrecognized_links: warn
+  anchors: warn

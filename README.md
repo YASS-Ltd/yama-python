@@ -33,6 +33,7 @@ Manage a building's access codes and read its call log from Python. The client h
 uv add yama        # or: pip install yama
 ```
 
+<!-- --8<-- [start:quick-start] -->
 ## Quick start
 
 ```python
@@ -52,6 +53,7 @@ for call in client.calls.list(start=start, end=end):
 ```
 
 Create a key in the Yama portal under **Settings › API keys**. Keep it in an environment variable or a secret manager, never in source control.
+<!-- --8<-- [end:quick-start] -->
 
 ## What you get
 

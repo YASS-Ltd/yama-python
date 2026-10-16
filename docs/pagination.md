@@ -1,0 +1,59 @@
+# Lists and the call log
+
+## Lists
+
+Every `list()` method returns an iterator of items. It requests nothing until you start iterating, then fetches pages of up to 500 as it goes and follows the API's `next` links to the end. Stop iterating, and it stops requesting.
+
+```python
+from yama import Yama
+
+client = Yama()
+
+for unit in client.units.list():
+    print(unit.name, unit.door_digit)
+
+first_building = next(client.buildings.list())  # fetches one page only
+```
+
+An iterator is single-use, like any Python iterator. To go over the items twice, make a list: `units = list(client.units.list())`.
+
+## Filters
+
+Filters are keyword arguments with the API's names. Leave one out to not filter by it. UUIDs can be `UUID` objects or strings, and enum filters take the enum or its string value.
+
+```python
+from yama import DoorDigit
+
+building = next(client.buildings.list())
+for unit in client.units.list(building=building.uuid, door_digit=DoorDigit.NINE):
+    print(unit.name)
+
+cleaners = list(client.codes.list(search="clean"))  # names containing "clean", any case
+```
+
+A UUID filter that isn't a valid UUID raises `ValueError` without sending a request.
+
+## The call log
+
+`calls.list()` takes a range of timezone-aware datetimes: it yields calls with `start <= started_at < end`, newest first. The range is half-open, so back-to-back ranges never miss or repeat a call, and one local day runs from its midnight to the next, in any time zone:
+
+```python
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
+
+from yama import CallResult
+
+vancouver = ZoneInfo("America/Vancouver")
+day = datetime(2026, 10, 10, tzinfo=vancouver)
+for call in client.calls.list(start=day, end=day + timedelta(days=1)):
+    print(call.started_at.astimezone(vancouver), call.result, call.summary)
+
+rejected = list(client.calls.list(start=day, result=CallResult.REJECTED))
+```
+
+- A `date`, or a datetime without a time zone, raises before any request is sent.
+- Leave out `start` or `end` to leave that side open; with neither, you get all history.
+- Paging stops at the first call before `start`, so polling for recent calls is cheap.
+- New calls arriving while you page push older ones onto the next page. The client skips a call it has already yielded, so each call comes once.
+
+To keep your own copy of the call log up to date, follow the [call-log sync recipe](production.md#syncing-the-call-log).
