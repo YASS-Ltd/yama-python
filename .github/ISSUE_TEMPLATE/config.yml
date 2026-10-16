@@ -1,5 +1,5 @@
 blank_issues_enabled: true
 contact_links:
   - name: Yama API documentation
-    url: https://app.getyama.ca/api/v2/docs/
+    url: https://app.yamasystems.com/api/v2/docs/
     about: Endpoints, authentication and conventions for the REST API itself.

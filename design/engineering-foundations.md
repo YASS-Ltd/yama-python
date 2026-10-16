@@ -70,15 +70,6 @@ The rules for what the client exposes and what it hides. They follow the convent
 
 The published OpenAPI schema is vendored as `tests/fixtures/openapi.yaml`. The client and its models are hand-written, and contract tests check them against the vendored copy. A daily CI job flags when the published schema drifts from it; updating the copy, and the client to match, is a deliberate change.
 
-## Yama's Domain
-
-Yama is moving from `getyama.ca` to `yamasystems.com` now, while no integration depends on the old host. The client targets the new host from its first release and never the old one:
-
-- `DEFAULT_BASE_URL` is `https://app.yamasystems.com` (host to be confirmed) and is the only place in the code that names the domain. `YAMA_API_BASE_URL` and the `base_url` argument override it.
-- 0.1.0 isn't released until the API answers on the new host. Until then, development and live tests point `YAMA_API_BASE_URL` at the current host, and the vendored schema comes from it.
-- `pyproject.toml` already points at the new domain, since its URLs only show on PyPI. When the new host is live, one change switches the `justfile`'s schema URL, re-vendors the schema, and updates the links people can follow today: the README, the issue template config and `AGENTS.md`.
-- The old host can redirect or be retired on the API's own schedule; no released client calls it.
-
 ## Requirements
 
 Requirements live in the PRD, written in [EARS](https://alistairmavin.com/ears/) form with an ID each (`RTY-2`). The PRD says what the client must do, and `design/interface.md` names the pieces; neither says how the work is split, which is up to the issues.

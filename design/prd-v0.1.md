@@ -30,12 +30,7 @@ A small, typed, official Python client removes that work and makes the documente
 
 ## API Prerequisites
 
-0.1.0 waits on these API changes, handed off to django-poc:
-
-1. **The new host:** the API served on `app.yamasystems.com`.
-2. **Idempotency keys:** `POST /api/v2/codes/` honours an `Idempotency-Key` header, so the client retries creates safely and an integrator never has to work out whether a failed create happened.
-
-Work on the client doesn't wait for them: it's built and tested against the current host and the in-memory fake.
+0.1.0 waits on one API change, handed off to django-poc: `POST /api/v2/codes/` honouring an `Idempotency-Key` header, so the client retries creates safely and an integrator never has to work out whether a failed create happened. Work on the client doesn't wait for it; it's built and tested against the in-memory fake.
 
 ## Requirements
 

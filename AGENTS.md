@@ -19,7 +19,7 @@ Yama is a cloud-based SaaS platform for managing access control (intercom/dialer
 
 The API is served by the private sister repo `../django-poc`, which is the source of truth for the API contract.
 
-- **The schema is the contract.** The public OpenAPI schema is at `https://app.getyama.ca/api/v2/schema/`, and the docs are at `/api/v2/docs/`. Build against the schema, not against django-poc's internals.
+- **The schema is the contract.** The public OpenAPI schema is at `https://app.yamasystems.com/api/v2/schema/`, and the docs are at `/api/v2/docs/`. Build against the schema, not against django-poc's internals.
 - Read-only references in `../django-poc` when it is checked out: `docs/api/getting-started.md` (integrator guide), `docs/api/reference.md`, `docs/api-versioning.md`, `docs/api-keys.md`.
 - **Never edit files in `../django-poc` from a session in this repo.** If the client needs an API change, write it up and hand it off as a django-poc task.
 - **Never copy private material into this repo**: no django-poc code, internal hostnames, deploy or ops details, customer names or customer data.
@@ -39,7 +39,7 @@ API conventions the client must handle:
 - MIT licence.
 - A hand-written client whose interface takes and returns Pydantic v2 models.
 - Enum values the client doesn't know pass through as strings.
-- Default base URL `https://app.yamasystems.com` (Yama is moving off `getyama.ca`; see `design/engineering-foundations.md`), overridden by the `base_url` argument or `YAMA_API_BASE_URL`.
+- Default base URL `https://app.yamasystems.com`, overridden by the `base_url` argument or `YAMA_API_BASE_URL`.
 - Python 3.10 and newer (policy in `design/engineering-foundations.md`).
 - A copy of the OpenAPI schema lives in this repo as a test fixture, and CI flags drift from the published schema.
 

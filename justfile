@@ -1,6 +1,6 @@
 # yama-python. Install just: https://just.systems/man/en/
 
-schema_url := "https://app.getyama.ca/api/v2/schema/"
+schema_url := "https://app.yamasystems.com/api/v2/schema/"
 schema_file := "tests/fixtures/openapi.yaml"
 
 # List recipes

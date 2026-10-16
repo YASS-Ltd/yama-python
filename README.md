@@ -18,14 +18,14 @@
 
 ---
 
-**API docs:** <https://app.getyama.ca/api/v2/docs/> · **Source:** <https://github.com/YASS-Ltd/yama-python>
+**API docs:** <https://app.yamasystems.com/api/v2/docs/> · **Source:** <https://github.com/YASS-Ltd/yama-python>
 
 ---
 
 Manage a building's access codes and read its call log from Python. The client handles auth, pagination, retries and errors, and gives you typed objects back.
 
 > [!NOTE]
-> **In development.** Nothing is on PyPI yet. Until then, use the [REST API](https://app.getyama.ca/api/v2/docs/) directly.
+> **In development.** Nothing is on PyPI yet. Until then, use the [REST API](https://app.yamasystems.com/api/v2/docs/) directly.
 
 ## Install
 
