@@ -62,22 +62,22 @@ Paths are relative to `/api/v2/`. `uuid` parameters accept `UUID | str`. Filters
 | Call | HTTP | Returns |
 |---|---|---|
 | `api_key.get()` | `GET api-key/` | `ApiKey` |
-| `buildings.list(*, page_size)` | `GET buildings/` | `Paginator[Building]` |
+| `buildings.list()` | `GET buildings/` | `Paginator[Building]` |
 | `buildings.get(uuid)` | `GET buildings/{uuid}/` | `Building` |
-| `units.list(*, building, door_digit, search, page_size)` | `GET units/` | `Paginator[Unit]` |
+| `units.list(*, building, door_digit, search)` | `GET units/` | `Paginator[Unit]` |
 | `units.get(uuid)` | `GET units/{uuid}/` | `Unit` |
-| `contacts.list(*, unit, number, menu_digit, page_size)` | `GET contacts/` | `Paginator[Contact]` |
+| `contacts.list(*, unit, number, menu_digit)` | `GET contacts/` | `Paginator[Contact]` |
 | `contacts.get(uuid)` | `GET contacts/{uuid}/` | `Contact` |
-| `codes.list(*, unit, code, name, search, page_size)` | `GET codes/` | `Paginator[AccessCode]` |
+| `codes.list(*, unit, code, name, search)` | `GET codes/` | `Paginator[AccessCode]` |
 | `codes.get(uuid)` | `GET codes/{uuid}/` | `AccessCode` |
 | `codes.create(data: AccessCodeCreate, *, idempotency_key: str \| None)` | `POST codes/` | `AccessCode` |
 | `codes.replace(uuid, data: AccessCodeCreate)` | `PUT codes/{uuid}/` | `AccessCode` |
 | `codes.update(uuid, data: AccessCodeUpdate)` | `PATCH codes/{uuid}/` | `AccessCode` |
 | `codes.delete(uuid)` | `DELETE codes/{uuid}/` | `None` |
-| `calls.list(*, start: date, end: date, unit, building, result, page_size)` | `GET calls/` | `Paginator[CallLogEntry]` |
+| `calls.list(*, start: date, end: date, unit, building, result)` | `GET calls/` | `Paginator[CallLogEntry]` |
 | `calls.get(uuid)` | `GET calls/{uuid}/` | `CallLogEntry` |
 
-There is no `offset` argument; the paginator follows `next` (PAG-1).
+Lists take no `limit` or `offset`: the paginator requests pages itself and follows `next` (PAG-1).
 
 ## Pagination
 
@@ -113,4 +113,4 @@ An error's message is `"<status> <detail>"`.
 
 ## Implementation Defaults
 
-Choices that aren't requirements, recorded so they're consistent: backoff starts at 0.5 s, doubles, is capped at 8 s, with full jitter. Async isn't in v0.1; keeping request building separate from sending should make an `AsyncYama` a small addition later.
+Choices that aren't requirements, recorded so they're consistent: every list requests the API's maximum page size (`limit=500`), for the fewest requests under the rate limit. Backoff starts at 0.5 s, doubles, is capped at 8 s, with full jitter. Async isn't in v0.1; keeping request building separate from sending should make an `AsyncYama` a small addition later.
