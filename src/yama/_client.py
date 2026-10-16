@@ -145,6 +145,7 @@ def _status_error(request: httpx.Request, response: httpx.Response) -> APIStatus
         response.headers.get("API-Version"),
         request.method,
         request.url.path,
+        response.headers.get("Request-Id"),
     )
     error_class = _ERRORS.get(status, ServerError if status >= 500 else APIStatusError)
     if error_class is RateLimitError:
@@ -368,6 +369,7 @@ class Yama:
                 status=None if response is None else response.status_code,
                 elapsed=time.monotonic() - started,
                 attempt=attempt,
+                request_id=None if response is None else response.headers.get("Request-Id"),
             )
             if response is not None:
                 if response.is_success:

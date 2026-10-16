@@ -59,6 +59,12 @@ def test_test_1_each_transport_has_its_own_data() -> None:
     assert second.get(f"{url}{code['uuid']}/").status_code == 200
 
 
+def test_test_1_gives_each_response_its_own_request_id(api: httpx.Client) -> None:
+    first, second = (api.get(f"codes/{MISSING}/").headers["Request-Id"] for _ in range(2))
+    assert first.startswith("req_")
+    assert first != second
+
+
 def test_test_1_reads_the_api_key(api: httpx.Client) -> None:
     assert api.get("api-key/").status_code == 200
 
