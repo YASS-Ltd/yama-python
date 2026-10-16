@@ -39,7 +39,7 @@ Four issues, in order. Each is small enough for one person or agent to finish an
 
 ## Current-State Audit
 
-Checked against django-poc on 2026-10-15 (release 2026.10.6, `docs/api/reference.md` and `docs/api/getting-started.md`):
+The vendored schema is the complete list of operations and filters; this table is a summary. Checked against django-poc on 2026-10-15 (release 2026.10.6, `docs/api/reference.md` and `docs/api/getting-started.md`):
 
 | Operation | Key permission |
 |---|---|
@@ -53,7 +53,7 @@ Checked against django-poc on 2026-10-15 (release 2026.10.6, `docs/api/reference
 
 Behaviour the client has to handle:
 
-- **Auth:** `Authorization: Bearer <key>`. A missing key or too low a permission is a `403` with a `detail` string. The permission check runs before any lookup, so a 403 never reveals whether an object exists.
+- **Auth:** `Authorization: Bearer <key>`. A bad, expired or missing key is a `401`; too low a permission is a `403`. Both carry a `detail` string. The permission check runs before any lookup, so a 403 never reveals whether an object exists.
 - **Pagination:** `limit` 1-500 (default 100) and `offset`; the envelope is `count`, `next`, `previous`, `results`. Follow `next` rather than building URLs.
 - **Call log:** inclusive UTC `start`/`end` dates, sent together. Without them the API returns the last 30 days. New calls arrive at the top while you page, so a call can appear on two pages.
 - **Strictness:** a read-only or unknown body field, or an undocumented query parameter, is a `400` naming it. Bodies are JSON only. An unknown object is a `404` with `{"detail": "Not found."}`.
