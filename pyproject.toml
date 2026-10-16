@@ -66,6 +66,7 @@ testpaths = ["tests"]
 addopts = ["--strict-markers", "--strict-config"]
 xfail_strict = true
 filterwarnings = ["error"]
+markers = ["live: runs against a real Yama API (just test-live)"]
 
 [tool.coverage.run]
 source = ["yama"]
