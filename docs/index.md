@@ -17,8 +17,7 @@ It needs Python 3.10 or newer, and depends only on httpx and Pydantic.
 ## Next steps
 
 - [Configuration](configuration.md): keys, timeouts, retries and your own `httpx.Client`.
-- [Lists and the call log](lists.md): filters, paging and date ranges.
-- [Models](models.md): what you get back and what you send.
+- [Reading and writing](reading-and-writing.md): lists, filters, the call log, and changing access codes.
 - [Errors and retries](errors.md): what to catch, and how creates stay safe to repeat.
 - [Logging](logging.md), [Testing](testing.md), and [web apps and background jobs](web-apps-and-jobs.md).
 - [Reference](reference.md): every class and method.

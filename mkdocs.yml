@@ -10,8 +10,7 @@ nav:
   - Home: index.md
   - Guide:
       - Configuration: configuration.md
-      - Lists and the call log: lists.md
-      - Models: models.md
+      - Reading and writing: reading-and-writing.md
       - Errors and retries: errors.md
       - Logging: logging.md
       - Testing: testing.md
