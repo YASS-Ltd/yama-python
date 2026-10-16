@@ -86,7 +86,7 @@ Paths are relative to `/api/v2/`. `uuid` parameters accept `UUID | str`. Filters
 
 A `uuid`, or a UUID filter such as `building` or `unit`, that isn't a valid UUID raises `ValueError` without sending a request. Filters take `str`, or `UUID` and enum members where the schema says so. An `idempotency_key` must be 1 to 255 printable ASCII characters without spaces (the API's limit), or `codes.create` raises `ValueError` without sending.
 
-Every time the client takes or returns is a timezone-aware `datetime` (MOD-1, MOD-4). `calls.list` takes the range `start <= started_at < end` (CALL-4 to CALL-6), so one local day is midnight to the next midnight in any zone; it sends the API the whole UTC dates covering it and drops the calls outside it.
+Every time the client takes or returns is a timezone-aware `datetime` (MOD-1, MOD-4). `calls.list` takes the range `start <= started_at < end` (CALL-4 to CALL-6), so one local day is midnight to the next midnight in any zone; it sends the API the whole UTC dates covering it and drops the calls outside it. The API returns calls newest first by `started_at`, so iteration stops, requesting no more pages, at the first call before `start` (CALL-7).
 
 Lists take no `limit` or `offset`: the iterator requests pages itself and follows `next` (PAG-1).
 

@@ -413,11 +413,11 @@ def test_call_3_sends_the_utc_dates_covering_the_range(
 
 
 def test_call_4_yields_only_calls_from_start_inclusive_to_end_exclusive() -> None:
-    times = [
-        "2026-10-10T06:59:59.999999Z",  # just before Vancouver midnight
-        "2026-10-10T07:00:00Z",  # Vancouver midnight: start, included
-        "2026-10-11T06:59:59.999999Z",
+    times = [  # newest first, as the API returns them
         "2026-10-11T07:00:00Z",  # the next Vancouver midnight: end, excluded
+        "2026-10-11T06:59:59.999999Z",
+        "2026-10-10T07:00:00Z",  # Vancouver midnight: start, included
+        "2026-10-10T06:59:59.999999Z",  # just before Vancouver midnight
     ]
     handler, _ = recorder(page(*(call(n, at) for n, at in enumerate(times))))
     client, _ = make_client(handler)
@@ -426,9 +426,9 @@ def test_call_4_yields_only_calls_from_start_inclusive_to_end_exclusive() -> Non
     )
     assert [c.reference for c in day] == ["REF1", "REF2"]
     open_end = client.calls.list(start=datetime(2026, 10, 10, 7, tzinfo=UTC))
-    assert [c.reference for c in open_end] == ["REF1", "REF2", "REF3"]
+    assert [c.reference for c in open_end] == ["REF0", "REF1", "REF2"]
     open_start = client.calls.list(end=datetime(2026, 10, 10, 7, tzinfo=UTC))
-    assert [c.reference for c in open_start] == ["REF0"]
+    assert [c.reference for c in open_start] == ["REF3"]
 
 
 def test_call_4_filters_what_the_api_returns_for_whole_utc_dates() -> None:
@@ -459,3 +459,30 @@ def test_call_6_rejects_an_end_before_start_without_sending() -> None:
         client.calls.list(start=start, end=start - timedelta(microseconds=1))
     assert requests == []
     assert list(client.calls.list(start=start, end=start)) == []  # empty, but valid
+
+
+def test_call_7_stops_paging_at_the_first_call_before_start() -> None:
+    times = ["2026-10-10T12:00:00Z", "2026-10-10T11:00:00Z", "2026-10-10T10:59:59Z"]
+    page_2, page_3 = f"{BASE}calls/?offset=2", f"{BASE}calls/?offset=4"
+    handler, requests = recorder(
+        page(call(1, times[0]), call(2, times[1]), next_url=page_2),
+        page(call(3, times[1]), call(4, times[2]), next_url=page_3),
+        page(call(5, times[2])),
+    )
+    client, _ = make_client(handler)
+    # A call exactly at `start` is still yielded; the first one before it ends the iteration.
+    calls = client.calls.list(start=datetime(2026, 10, 10, 11, tzinfo=UTC))
+    assert [c.reference for c in calls] == ["REF1", "REF2", "REF3"]
+    assert len(requests) == 2  # the third page is never requested
+
+
+def test_call_7_pages_through_everything_without_a_start() -> None:
+    page_2 = f"{BASE}calls/?offset=1"
+    handler, requests = recorder(
+        page(call(1, "2026-10-10T12:00:00Z"), next_url=page_2),
+        page(call(2, "2026-10-01T12:00:00Z")),
+    )
+    client, _ = make_client(handler)
+    calls = client.calls.list(end=datetime(2026, 10, 11, tzinfo=UTC))
+    assert [c.reference for c in calls] == ["REF1", "REF2"]
+    assert len(requests) == 2
