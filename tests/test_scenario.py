@@ -44,8 +44,8 @@ def client() -> Iterator[Yama]:
 
 
 def test_scenario_drives_every_operation(client: Yama) -> None:
-    key = client.api_key.get()
-    assert key.permissions.codes == AccessLevel.WRITE
+    key_details = client.api_key.get()
+    assert key_details.permissions.codes == AccessLevel.WRITE
 
     buildings = list(client.buildings.list())
     assert client.buildings.get(buildings[0].uuid) == buildings[0]

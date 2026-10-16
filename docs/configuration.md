@@ -15,10 +15,10 @@ Or pass it from wherever you keep secrets, as `Yama(api_key=...)`. A key passed 
 A good first call is the key's own record, which says what the key may do:
 
 ```python
-key = client.api_key.get()
-print(key.name, key.expires_at)
-print(key.permissions.codes)  # none, read or write
-print(key.unit_access.type)  # all, buildings or units
+key_details = client.api_key.get()
+print(key_details.name, key_details.expires_at)
+print(key_details.permissions.codes)  # none, read or write
+print(key_details.unit_access.type)  # all, buildings or units
 ```
 
 ## Options
