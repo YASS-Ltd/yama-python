@@ -16,4 +16,4 @@ Each release targets one version of the Yama API, currently version 2 (`/api/v2/
 
 ## Python
 
-The client supports Python 3.10 and newer, and is tested on every supported version. An old version is dropped only in a minor release, announced in the changelog, some time after it reaches its end of life. pip and uv then keep installing the last release that supports it.
+The client supports Python 3.10 and newer, and is tested on every supported version. An old version is dropped only in a minor release, announced in the changelog, some time after it reaches its end of life.

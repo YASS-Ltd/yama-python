@@ -2,7 +2,7 @@
 
 ## One client per process
 
-A `Yama` client holds a pool of connections and is safe to share between threads, so create one per process and reuse it. Create it on first use, never at import time: Celery's prefork workers and gunicorn with `--preload` fork after importing your code, and a client created before the fork would share its connections between processes. A cached factory does this:
+A `Yama` client holds a pool of connections and is safe to share between threads, so create one per process and reuse it. Create it on first use, never at import time: Celery's prefork workers and gunicorn with `--preload` fork after importing your code, and a client created before the fork would share its connections between processes. One way is a cached factory:
 
 ```python
 from functools import cache
@@ -27,14 +27,14 @@ def view_client() -> Yama:
     return yama_client().with_options(timeout=5.0, max_retries=0)
 
 
-units = list(view_client().units.list())
+building = next(view_client().buildings.list())
 ```
 
 ## Async code
 
 The client is synchronous for now: each call blocks until it has an answer, and `http_client` must be an `httpx.Client`, not an `httpx.AsyncClient`. Async support is planned for a later release. Until then, run calls in a worker thread so they don't block the event loop. The client is safe to share between threads, so one client still serves the whole process.
 
-`asyncio.to_thread()` runs a call in a thread and awaits the result. Lists are fetched lazily as you iterate, so collect them inside the thread with `list()`, or the pages are fetched on the event loop:
+Lists fetch their pages as you iterate, so iterate them inside the worker thread too, or the pages are fetched on the event loop:
 
 ```python
 import asyncio
@@ -69,7 +69,7 @@ A job queue may run a task twice: a retry after a timeout, a worker that died pa
 - **Send the same data with the same key.** Work out anything that changes from run to run, such as an `expires_at` computed from the current time, once, outside the part that re-runs, and pass it in.
 - **After a `BadRequestError`, use a new key.** The API replays a 400 for the key that got it, for 24 hours, so a corrected create needs a key of its own.
 
-With Celery, compute `expires_at` when you enqueue the task, and pass it as a string so it serialises as JSON:
+With Celery, compute `expires_at` when you enqueue the task:
 
 <!-- not run -->
 
