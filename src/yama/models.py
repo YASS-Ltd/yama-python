@@ -249,9 +249,8 @@ class AccessCodeCreate(_Request):
     """A new access code, or the whole of one being replaced.
 
     `code` is 3 to 15 digits, and `name`, which is optional, is at most 255 characters. Leave
-    `expires_at` out for a code that never expires; when replacing, leaving it out keeps the
-    current expiry and None clears it. The API doesn't say what leaving `name` out does on a
-    replace, so pass the name the code should have.
+    `expires_at` out for a code that never expires. When replacing, leaving `name` or
+    `expires_at` out keeps its current value, and None clears it.
     """
 
     unit: UUID
