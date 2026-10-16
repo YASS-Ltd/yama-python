@@ -52,7 +52,7 @@ The rules for what the client exposes and what it hides. They follow the convent
 
 5. **Small and explicit.** The public interface is what `yama/__init__.py` and `yama.models` export, as listed in `design/interface.md`. Everything else is underscore-private. Adding to the surface is easy; removing from it is a breaking change, so add reluctantly.
 6. **Typed and documented.** Every public name has type hints and a docstring, mypy runs in strict mode, and the package ships `py.typed`. Editor autocompletion should be enough to use the client.
-7. **Our errors, not our dependencies'.** Every failure the client raises is a `YamaError`; httpx and Pydantic exceptions never leak out of a call. The exception is programmer error, such as a wrong argument type or `start` without `end`, which raises the usual `TypeError` or `ValueError`.
+7. **Our errors, not our dependencies'.** Calls raise only `YamaError`s, or the usual `TypeError` or `ValueError` for invalid arguments, such as a wrong argument type; httpx and Pydantic exceptions from the client's internals never leak out. Building a request model is plain Pydantic and raises `pydantic.ValidationError` (itself a `ValueError`) before any call is made.
 
 ### Compatibility
 
