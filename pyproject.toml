@@ -1,6 +1,6 @@
 [project]
 name = "yama-client"
-version = "0.0.0"
+version = "0.1.0"
 description = "The official Python client for the Yama access-control API"
 readme = "README.md"
 license = "MIT"
