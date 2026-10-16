@@ -14,6 +14,7 @@ src/yama/
   _resources.py    # one small class per resource
   _errors.py       # exception classes
   models.py        # Pydantic models and enums (public module)
+  testing.py       # fake_transport() (public module)
 ```
 
 ## Quick Look
@@ -40,10 +41,10 @@ with Yama() as client:  # api_key from YAMA_API_KEY
 
 ```python
 Yama(
-    api_key: str | None = None,
+    api_key: str | None = <omitted>,   # private sentinel: only an omitted key falls back to YAMA_API_KEY (CFG-1)
     *,
     base_url: str | None = None,
-    timeout: float = 30.0,
+    timeout: float | httpx.Timeout = 30.0,
     max_retries: int = 2,
     http_client: httpx.Client | None = None,
 )
@@ -88,11 +89,19 @@ class Paginator(Generic[T]):        # returned by every list()
 
 Iterating yields items, never pages (PAG-1). Pages are parsed with a private `_Page` model and never exposed.
 
+## Testing (`yama.testing`)
+
+```python
+def fake_transport() -> httpx.MockTransport
+```
+
+Use: `Yama(api_key="test", http_client=httpx.Client(transport=fake_transport()))` (TEST-1). It implements the behaviours listed in the foundations doc's testing strategy. The repo's own tests check its responses against the vendored schema.
+
 ## Models (`yama.models`)
 
 - **Responses**, mirroring the schema's components field for field: `ApiKey` (with `ApiKeyPermissions`, `ApiKeyUnitAccess`), `Building`, `Unit`, `Contact`, `AccessCode`, `CallLogEntry`, `CallLogStep`. Frozen, with `extra="allow"` (MOD-2).
 - **Requests:** `AccessCodeCreate` (`unit: UUID`, `code: str`, `name: str | None = None`, `expires_at: AwareDatetime | None = None`) and `AccessCodeUpdate` (the same fields, all optional). `extra="forbid"` (MOD-4).
-- **Enums**, as `str` enums: `CallResult`, `CallStepKind`, `CodeAttemptResult`, `DialStatus`, `DoorDigit`, `AccessLevel` (`none`/`read`/`write`) and `UnitAccessType`. Response fields are typed `Enum | str` with left-to-right union mode (MOD-3).
+- **Enums**, as `str` enums: `CallResult`, `CallStepKind`, `CodeAttemptResult`, `DialStatus`, `DoorDigit`, `AccessLevel` (`none`/`read`/`write`) and `UnitAccessType`. Response fields are typed `Enum | str` with left-to-right union mode (MOD-3). Compare with `==` (`call.result == CallResult.REJECTED`), which works for both forms without type narrowing.
 - **Known schema bug:** `ApiKey.expires_at` and `last_used_at` are `datetime | None`, although the schema marks them non-nullable; the API really returns `null`. A fix is filed upstream. Until it lands, the contract tests allow this one difference.
 
 ## Errors
@@ -109,7 +118,7 @@ YamaError                       # base; also raised for misconfiguration (CFG-2)
     └── ServerError             # 5xx
 ```
 
-An error's message is `"<status> <detail>"`.
+An error's message is `"<status> <detail>"`. Errors hold plain fields only, never the `httpx.Response` (ERR-5). The `codes.create` docstring says to pass a stable `idempotency_key` when the caller's own code may repeat a create, such as a job that re-runs.
 
 ## Implementation Defaults
 

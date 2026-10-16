@@ -24,29 +24,17 @@ The API is served by the private sister repo `../django-poc`, which is the sourc
 - **Never edit files in `../django-poc` from a session in this repo.** If the client needs an API change, write it up and hand it off as a django-poc task.
 - **Never copy private material into this repo**: no django-poc code, internal hostnames, deploy or ops details, customer names or customer data.
 
-API conventions the client must handle:
-
-- Base path `/api/v2/`. Auth is an API key sent as `Authorization: Bearer <key>`; never put a key in a URL.
-- JSON only. Request bodies are strict: a read-only or unknown field is a `400` naming it. An undocumented query parameter is also a `400`.
-- Lists use `limit`/`offset` pagination (`count`, `next`, `previous`, `results`); follow `next` until it is `null`. The call log is filtered by inclusive UTC `start`/`end` dates (default: the last 30 days), and new calls can shift pages, so de-duplicate by `uuid`.
-- Datetimes are UTC ISO 8601.
-- Retry only on 5xx, 429 (honour `Retry-After`) and network errors, with backoff. Every response carries an `API-Version` header.
-- Within v2, changes are additive. The client must tolerate new fields in responses.
+The API behaviour the client must handle is written down once, as requirements in `design/prd-v0.1.md`.
 
 ## Settled choices
 
-- Its own public repo (`YASS-Ltd/yama-python`), with work tracked in GitHub Issues and Projects. Versioned with SemVer and published to PyPI as `yama` (import name `yama`), independently of the app's CalVer releases.
-- MIT licence.
-- A hand-written client whose interface takes and returns Pydantic v2 models.
-- Enum values the client doesn't know pass through as strings.
-- Default base URL `https://app.yamasystems.com`, overridden by the `base_url` argument or `YAMA_API_BASE_URL`.
-- Python 3.10 and newer (policy in `design/engineering-foundations.md`).
-- A copy of the OpenAPI schema lives in this repo as a test fixture, and CI flags drift from the published schema.
+- Its own public repo (`YASS-Ltd/yama-python`), with work tracked in GitHub Issues and Projects. Versioned with SemVer and published to PyPI as `yama`, independently of the app's CalVer releases.
+- Product choices (licence, Pydantic models, supported Python versions) are in the PRD's Settled Choices; behaviour is in its requirements.
 
 ## Development Workflow
 
 - Use [uv](https://docs.astral.sh/uv/) for every Python command, as in django-poc.
-- Use the [just](https://just.systems/man/en/) recipes when one exists (`just --list`); `just check` runs what CI runs. Releases go through `just release` (try `just release --dry-run` first) and publish from CI, never from a local machine. The process is in `design/engineering-foundations.md`.
+- Use the [just](https://just.systems/man/en/) recipes when one exists (`just --list`); `just check` runs what CI runs. Releases will go through `just release` (try `just release --dry-run` first; both arrive with the release work) and publish from CI, never from a local machine. The process is in `design/engineering-foundations.md`.
 - **Tests first**: write a failing test, implement the minimum change, refactor while green. Name each test after the requirement it checks (`test_rty_2_...`).
 - Tests must not call the production API. Use recorded or mocked HTTP responses, plus contract checks against the schema.
 - Never commit API keys, even expired ones, or real responses containing customer data.
