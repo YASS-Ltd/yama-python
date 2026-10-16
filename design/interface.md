@@ -22,14 +22,14 @@ src/yama/
 from datetime import date, datetime, timezone
 from yama import Yama, AccessCodeCreate, AccessCodeUpdate, NotFoundError
 
-with Yama() as client:                       # api_key from YAMA_API_KEY
-    key = client.api_key.get()               # first call: what can this key do?
+with Yama() as client:  # api_key from YAMA_API_KEY
+    key = client.api_key.get()  # first call: what can this key do?
 
     for unit in client.units.list(building=building_uuid):
         ...
 
     code = client.codes.create(AccessCodeCreate(unit=unit.uuid, code="4321", name="Cleaner"))
-    client.codes.update(code.uuid, AccessCodeUpdate(expires_at=None))   # clear the expiry
+    client.codes.update(code.uuid, AccessCodeUpdate(expires_at=None))  # clear the expiry
     client.codes.delete(code.uuid)
 
     for call in client.calls.list(start=date(2026, 10, 1), end=date(2026, 10, 31)):

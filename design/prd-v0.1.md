@@ -69,8 +69,6 @@ Behaviour the client has to handle:
 - **Rate limits:** 600 requests a minute sustained and 20 a second burst, per key. A `429` carries `Retry-After` in whole seconds. Retry only on 5xx, 429 and network errors.
 - **Versioning:** every response carries `API-Version: v2`. Changes within v2 are additive, so the client must tolerate new response fields and new enum values (for example a new call `result`).
 
-Correction to earlier notes: django-poc TASK-243 mentioned a separate `before` + `limit` paging for the call log. The published API pages calls with `limit`/`offset` like every other list, filtered by `start`/`end`.
-
 ## Settled Choices
 
 - PyPI name `yama`, import name `yama`.
