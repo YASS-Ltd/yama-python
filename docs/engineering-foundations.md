@@ -19,8 +19,10 @@ Lightweight code and lightweight process. Few dependencies, little code, and as 
 | Linting and formatting | ruff |
 | Type checking | mypy in strict mode, and the package ships `py.typed` |
 | Testing | pytest, [respx](https://lundberg.github.io/respx/) for mocked HTTP |
-| Docs | **Proposed:** MkDocs with mkdocstrings, published to GitHub Pages |
+| Docs | [Zensical](https://zensical.org/) with mkdocstrings, published to GitHub Pages |
 | Task runner | [just](https://just.systems/man/en/) |
+
+Zensical is the successor to Material for MkDocs, from the same team; Material went into maintenance mode in November 2025. The site is branded with Yama's colours, Dark Forest `#21212B` and Clay Rose `#E3C8BD`, and the logo and icon in `.github/assets/` (the logo has a Dark Forest variant for light backgrounds and a Clay Rose one for dark). Zensical is young; if it falls short, Material for MkDocs reads the same configuration.
 
 httpx is chosen over requests because it offers sync and async clients with one interface, so async can be added later without a rewrite. It also has timeouts on by default and is well typed.
 

@@ -35,7 +35,7 @@ Four issues, in order. Each is small enough for one person or agent to finish an
 1. **Skeleton and CI:** packaging, the `justfile`, the vendored schema, and CI running `just check` plus a schema drift check.
 2. **Core:** the client (key, base URL, timeout), Bearer auth, `User-Agent`, typed errors, retries on 5xx/429/network errors with `Retry-After`, and a pagination iterator that follows `next`.
 3. **Resources:** every operation in the audit below, each a thin method over the core: the API key, buildings, units, contacts, access codes (including clearing `expires_at`), and the call log with `uuid` de-duplication.
-4. **Release 0.1.0:** README quick start, `just release`, the publish workflow, and the first release to PyPI.
+4. **Release 0.1.0:** README quick start, the branded Zensical docs site, `just release`, the publish workflow, and the first release to PyPI.
 
 ## Current-State Audit
 
