@@ -132,10 +132,12 @@ info:
 
     Errors use standard HTTP status codes with a JSON body. Request-level errors have a `detail` string; validation errors (400) map each field to a list of messages.
 
+    Every response, errors included, carries a `Request-Id` header, such as `Request-Id: req_3f9c0b7e5d2a4c18b6e1f04a9d7c2e53`. It is unique to that request, and a retry gets a new one; treat it as an opaque string. Log it with your own errors, and when you contact Yama support about a request, quote its Request-Id so we can find it at once.
+
     - **400:** a field or query parameter has a bad value, such as `{"expires_at": ["Expiry must be in the future."]}`, or the operation doesn't take that query parameter (often a typo): `{"buildling": ["Unknown query parameter."]}`. The same goes for the body: `{"uuid": ["This field is read-only."]}` or `{"colour": ["Unknown field."]}`. Creating a code on a unit outside the key's unit access reads `{"unit": ["Unit does not exist."]}`.
     - **401:** the key is malformed, unknown, deleted or expired, or its owner was deactivated: `{"detail": "Invalid API key."}` or `{"detail": "API key expired."}`. `Authorization: Bearer` with nothing after it gets `{"detail": "No API key was sent after Bearer."}`. Every 401 carries `WWW-Authenticate: Bearer realm="api"`.
     - **403:** no credentials were sent, `{"detail": "Authentication credentials were not provided."}`, or the key's permission is too low for the resource and method: `{"detail": "This API key does not grant Contacts: Read."}`. The permission check runs before any lookup, so a 403 never reveals whether an object exists.
-    - **404:** the object doesn't exist, belongs to someone else, or is outside the key's unit access. These look the same on purpose: `{"detail": "No Unit matches the given query."}`.
+    - **404:** the object doesn't exist, belongs to someone else, or is outside the key's unit access. These look the same on purpose: `{"detail": "Not found."}`.
     - **405:** the endpoint doesn't offer this method; everything but access codes is read-only: `{"detail": "Method \"PATCH\" not allowed."}`.
     - **409:** a request with the same `Idempotency-Key` is still running (see Retrying a create safely below): `{"detail": "A request with this Idempotency-Key is still in progress. Retry shortly."}`. Wait the `Retry-After` seconds and send the same request again.
     - **410:** a retried create replayed a code that has since been deleted or is no longer within the key's reach: `{"detail": "The object this request created has since been deleted or is no longer within your reach."}`. The create did happen; don't send it again with the same key.
@@ -435,7 +437,8 @@ info:
 
     def check(response):
         if not response.ok:
-            raise RuntimeError(f"{response.status_code} {response.request.method} {response.url}: {response.text}")
+            request_id = response.headers.get("Request-Id")
+            raise RuntimeError(f"{response.status_code} {response.request.method} {response.url} (request {request_id}): {response.text}")
         return response
 
 
@@ -528,6 +531,13 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiKey'
           description: ''
+          headers:
+            Request-Id:
+              schema:
+                type: string
+              description: 'Identifies this request. Quote it when you contact Yama
+                support about this request. Treat it as an opaque string: its format
+                may change.'
         '401':
           description: The API key is malformed, unknown, deleted or expired, or no
             key followed `Bearer`.
@@ -535,6 +545,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+          headers:
+            Request-Id:
+              schema:
+                type: string
+              description: 'Identifies this request. Quote it when you contact Yama
+                support about this request. Treat it as an opaque string: its format
+                may change.'
         '403':
           description: No credentials were sent, or the key lacks the permission this
             operation needs.
@@ -542,12 +559,26 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+          headers:
+            Request-Id:
+              schema:
+                type: string
+              description: 'Identifies this request. Quote it when you contact Yama
+                support about this request. Treat it as an opaque string: its format
+                may change.'
         '429':
           description: 'Rate limited: retry after the `Retry-After` header''s seconds.'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+          headers:
+            Request-Id:
+              schema:
+                type: string
+              description: 'Identifies this request. Quote it when you contact Yama
+                support about this request. Treat it as an opaque string: its format
+                may change.'
       x-api-key-permission: any
   /api/v2/buildings/:
     get:
@@ -586,12 +617,26 @@ paths:
               schema:
                 $ref: '#/components/schemas/PaginatedBuildingList'
           description: ''
+          headers:
+            Request-Id:
+              schema:
+                type: string
+              description: 'Identifies this request. Quote it when you contact Yama
+                support about this request. Treat it as an opaque string: its format
+                may change.'
         '400':
           description: A field or query parameter is invalid, blank or unknown.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ValidationError'
+          headers:
+            Request-Id:
+              schema:
+                type: string
+              description: 'Identifies this request. Quote it when you contact Yama
+                support about this request. Treat it as an opaque string: its format
+                may change.'
         '401':
           description: The API key is malformed, unknown, deleted or expired, or no
             key followed `Bearer`.
@@ -599,6 +644,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+          headers:
+            Request-Id:
+              schema:
+                type: string
+              description: 'Identifies this request. Quote it when you contact Yama
+                support about this request. Treat it as an opaque string: its format
+                may change.'
         '403':
           description: No credentials were sent, or the key lacks the permission this
             operation needs.
@@ -606,12 +658,26 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+          headers:
+            Request-Id:
+              schema:
+                type: string
+              description: 'Identifies this request. Quote it when you contact Yama
+                support about this request. Treat it as an opaque string: its format
+                may change.'
         '429':
           description: 'Rate limited: retry after the `Retry-After` header''s seconds.'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+          headers:
+            Request-Id:
+              schema:
+                type: string
+              description: 'Identifies this request. Quote it when you contact Yama
+                support about this request. Treat it as an opaque string: its format
+                may change.'
       x-api-key-permission: buildings:read
   /api/v2/buildings/{uuid}/:
     get:
@@ -640,6 +706,13 @@ paths:
               schema:
                 $ref: '#/components/schemas/Building'
           description: ''
+          headers:
+            Request-Id:
+              schema:
+                type: string
+              description: 'Identifies this request. Quote it when you contact Yama
+                support about this request. Treat it as an opaque string: its format
+                may change.'
         '401':
           description: The API key is malformed, unknown, deleted or expired, or no
             key followed `Bearer`.
@@ -647,6 +720,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+          headers:
+            Request-Id:
+              schema:
+                type: string
+              description: 'Identifies this request. Quote it when you contact Yama
+                support about this request. Treat it as an opaque string: its format
+                may change.'
         '403':
           description: No credentials were sent, or the key lacks the permission this
             operation needs.
@@ -654,6 +734,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+          headers:
+            Request-Id:
+              schema:
+                type: string
+              description: 'Identifies this request. Quote it when you contact Yama
+                support about this request. Treat it as an opaque string: its format
+                may change.'
         '404':
           description: No such object within the caller's reach (another account's
             looks the same).
@@ -661,18 +748,32 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+          headers:
+            Request-Id:
+              schema:
+                type: string
+              description: 'Identifies this request. Quote it when you contact Yama
+                support about this request. Treat it as an opaque string: its format
+                may change.'
         '429':
           description: 'Rate limited: retry after the `Retry-After` header''s seconds.'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+          headers:
+            Request-Id:
+              schema:
+                type: string
+              description: 'Identifies this request. Quote it when you contact Yama
+                support about this request. Treat it as an opaque string: its format
+                may change.'
       x-api-key-permission: buildings:read
   /api/v2/calls/:
     get:
       operationId: calls_list
       description: |-
-        List intercom calls on the units you can reach, newest first, with their steps, for a range of UTC dates (the last 30 days by default). Filter with `?unit=<unit uuid>` or `?building=<building uuid>`. Pages with `limit` and `offset` like every list; follow `next` for older calls.
+        List intercom calls on the units you can reach, newest `started_at` first (a call imported later from carrier records takes its `started_at` place), with their steps, for a range of UTC dates (the last 30 days by default). Filter with `?unit=<unit uuid>` or `?building=<building uuid>`. Pages with `limit` and `offset` like every list; follow `next` for older calls.
 
         Requires the API key permission Call log: Read.
       summary: List calls
@@ -753,12 +854,26 @@ paths:
               schema:
                 $ref: '#/components/schemas/PaginatedCallLogEntryList'
           description: ''
+          headers:
+            Request-Id:
+              schema:
+                type: string
+              description: 'Identifies this request. Quote it when you contact Yama
+                support about this request. Treat it as an opaque string: its format
+                may change.'
         '400':
           description: A field or query parameter is invalid, blank or unknown.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ValidationError'
+          headers:
+            Request-Id:
+              schema:
+                type: string
+              description: 'Identifies this request. Quote it when you contact Yama
+                support about this request. Treat it as an opaque string: its format
+                may change.'
         '401':
           description: The API key is malformed, unknown, deleted or expired, or no
             key followed `Bearer`.
@@ -766,6 +881,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+          headers:
+            Request-Id:
+              schema:
+                type: string
+              description: 'Identifies this request. Quote it when you contact Yama
+                support about this request. Treat it as an opaque string: its format
+                may change.'
         '403':
           description: No credentials were sent, or the key lacks the permission this
             operation needs.
@@ -773,12 +895,26 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+          headers:
+            Request-Id:
+              schema:
+                type: string
+              description: 'Identifies this request. Quote it when you contact Yama
+                support about this request. Treat it as an opaque string: its format
+                may change.'
         '429':
           description: 'Rate limited: retry after the `Retry-After` header''s seconds.'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+          headers:
+            Request-Id:
+              schema:
+                type: string
+              description: 'Identifies this request. Quote it when you contact Yama
+                support about this request. Treat it as an opaque string: its format
+                may change.'
       x-api-key-permission: call_log:read
   /api/v2/calls/{uuid}/:
     get:
@@ -807,6 +943,13 @@ paths:
               schema:
                 $ref: '#/components/schemas/CallLogEntry'
           description: ''
+          headers:
+            Request-Id:
+              schema:
+                type: string
+              description: 'Identifies this request. Quote it when you contact Yama
+                support about this request. Treat it as an opaque string: its format
+                may change.'
         '401':
           description: The API key is malformed, unknown, deleted or expired, or no
             key followed `Bearer`.
@@ -814,6 +957,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+          headers:
+            Request-Id:
+              schema:
+                type: string
+              description: 'Identifies this request. Quote it when you contact Yama
+                support about this request. Treat it as an opaque string: its format
+                may change.'
         '403':
           description: No credentials were sent, or the key lacks the permission this
             operation needs.
@@ -821,6 +971,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+          headers:
+            Request-Id:
+              schema:
+                type: string
+              description: 'Identifies this request. Quote it when you contact Yama
+                support about this request. Treat it as an opaque string: its format
+                may change.'
         '404':
           description: No such object within the caller's reach (another account's
             looks the same).
@@ -828,12 +985,26 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+          headers:
+            Request-Id:
+              schema:
+                type: string
+              description: 'Identifies this request. Quote it when you contact Yama
+                support about this request. Treat it as an opaque string: its format
+                may change.'
         '429':
           description: 'Rate limited: retry after the `Retry-After` header''s seconds.'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+          headers:
+            Request-Id:
+              schema:
+                type: string
+              description: 'Identifies this request. Quote it when you contact Yama
+                support about this request. Treat it as an opaque string: its format
+                may change.'
       x-api-key-permission: call_log:read
   /api/v2/codes/:
     get:
@@ -895,12 +1066,26 @@ paths:
               schema:
                 $ref: '#/components/schemas/PaginatedAccessCodeList'
           description: ''
+          headers:
+            Request-Id:
+              schema:
+                type: string
+              description: 'Identifies this request. Quote it when you contact Yama
+                support about this request. Treat it as an opaque string: its format
+                may change.'
         '400':
           description: A field or query parameter is invalid, blank or unknown.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ValidationError'
+          headers:
+            Request-Id:
+              schema:
+                type: string
+              description: 'Identifies this request. Quote it when you contact Yama
+                support about this request. Treat it as an opaque string: its format
+                may change.'
         '401':
           description: The API key is malformed, unknown, deleted or expired, or no
             key followed `Bearer`.
@@ -908,6 +1093,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+          headers:
+            Request-Id:
+              schema:
+                type: string
+              description: 'Identifies this request. Quote it when you contact Yama
+                support about this request. Treat it as an opaque string: its format
+                may change.'
         '403':
           description: No credentials were sent, or the key lacks the permission this
             operation needs.
@@ -915,12 +1107,26 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+          headers:
+            Request-Id:
+              schema:
+                type: string
+              description: 'Identifies this request. Quote it when you contact Yama
+                support about this request. Treat it as an opaque string: its format
+                may change.'
         '429':
           description: 'Rate limited: retry after the `Retry-After` header''s seconds.'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+          headers:
+            Request-Id:
+              schema:
+                type: string
+              description: 'Identifies this request. Quote it when you contact Yama
+                support about this request. Treat it as an opaque string: its format
+                may change.'
       x-api-key-permission: codes:read
     post:
       operationId: codes_create
@@ -954,6 +1160,12 @@ paths:
                 - 'true'
               description: Present when this response replays an earlier request with
                 the same Idempotency-Key.
+            Request-Id:
+              schema:
+                type: string
+              description: 'Identifies this request. Quote it when you contact Yama
+                support about this request. Treat it as an opaque string: its format
+                may change.'
         '400':
           description: A field or query parameter is invalid, blank or unknown.
           content:
@@ -968,6 +1180,12 @@ paths:
                 - 'true'
               description: Present when this response replays an earlier request with
                 the same Idempotency-Key.
+            Request-Id:
+              schema:
+                type: string
+              description: 'Identifies this request. Quote it when you contact Yama
+                support about this request. Treat it as an opaque string: its format
+                may change.'
         '401':
           description: The API key is malformed, unknown, deleted or expired, or no
             key followed `Bearer`.
@@ -975,6 +1193,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+          headers:
+            Request-Id:
+              schema:
+                type: string
+              description: 'Identifies this request. Quote it when you contact Yama
+                support about this request. Treat it as an opaque string: its format
+                may change.'
         '403':
           description: No credentials were sent, or the key lacks the permission this
             operation needs.
@@ -982,12 +1207,26 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+          headers:
+            Request-Id:
+              schema:
+                type: string
+              description: 'Identifies this request. Quote it when you contact Yama
+                support about this request. Treat it as an opaque string: its format
+                may change.'
         '429':
           description: 'Rate limited: retry after the `Retry-After` header''s seconds.'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+          headers:
+            Request-Id:
+              schema:
+                type: string
+              description: 'Identifies this request. Quote it when you contact Yama
+                support about this request. Treat it as an opaque string: its format
+                may change.'
         '409':
           description: 'A request with this Idempotency-Key is still in progress:
             retry after the `Retry-After` header''s seconds.'
@@ -995,6 +1234,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+          headers:
+            Request-Id:
+              schema:
+                type: string
+              description: 'Identifies this request. Quote it when you contact Yama
+                support about this request. Treat it as an opaque string: its format
+                may change.'
         '410':
           description: A replayed create whose object has since been deleted or is
             out of reach. The create happened; don't recreate it with the same key.
@@ -1010,12 +1256,25 @@ paths:
                 - 'true'
               description: Present when this response replays an earlier request with
                 the same Idempotency-Key.
+            Request-Id:
+              schema:
+                type: string
+              description: 'Identifies this request. Quote it when you contact Yama
+                support about this request. Treat it as an opaque string: its format
+                may change.'
         '422':
           description: This Idempotency-Key was already used with a different request.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+          headers:
+            Request-Id:
+              schema:
+                type: string
+              description: 'Identifies this request. Quote it when you contact Yama
+                support about this request. Treat it as an opaque string: its format
+                may change.'
       x-api-key-permission: codes:write
       parameters:
       - name: Idempotency-Key
@@ -1057,6 +1316,13 @@ paths:
               schema:
                 $ref: '#/components/schemas/AccessCode'
           description: ''
+          headers:
+            Request-Id:
+              schema:
+                type: string
+              description: 'Identifies this request. Quote it when you contact Yama
+                support about this request. Treat it as an opaque string: its format
+                may change.'
         '401':
           description: The API key is malformed, unknown, deleted or expired, or no
             key followed `Bearer`.
@@ -1064,6 +1330,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+          headers:
+            Request-Id:
+              schema:
+                type: string
+              description: 'Identifies this request. Quote it when you contact Yama
+                support about this request. Treat it as an opaque string: its format
+                may change.'
         '403':
           description: No credentials were sent, or the key lacks the permission this
             operation needs.
@@ -1071,6 +1344,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+          headers:
+            Request-Id:
+              schema:
+                type: string
+              description: 'Identifies this request. Quote it when you contact Yama
+                support about this request. Treat it as an opaque string: its format
+                may change.'
         '404':
           description: No such object within the caller's reach (another account's
             looks the same).
@@ -1078,12 +1358,26 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+          headers:
+            Request-Id:
+              schema:
+                type: string
+              description: 'Identifies this request. Quote it when you contact Yama
+                support about this request. Treat it as an opaque string: its format
+                may change.'
         '429':
           description: 'Rate limited: retry after the `Retry-After` header''s seconds.'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+          headers:
+            Request-Id:
+              schema:
+                type: string
+              description: 'Identifies this request. Quote it when you contact Yama
+                support about this request. Treat it as an opaque string: its format
+                may change.'
       x-api-key-permission: codes:read
     put:
       operationId: codes_update
@@ -1117,12 +1411,26 @@ paths:
               schema:
                 $ref: '#/components/schemas/AccessCode'
           description: ''
+          headers:
+            Request-Id:
+              schema:
+                type: string
+              description: 'Identifies this request. Quote it when you contact Yama
+                support about this request. Treat it as an opaque string: its format
+                may change.'
         '400':
           description: A field or query parameter is invalid, blank or unknown.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ValidationError'
+          headers:
+            Request-Id:
+              schema:
+                type: string
+              description: 'Identifies this request. Quote it when you contact Yama
+                support about this request. Treat it as an opaque string: its format
+                may change.'
         '401':
           description: The API key is malformed, unknown, deleted or expired, or no
             key followed `Bearer`.
@@ -1130,6 +1438,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+          headers:
+            Request-Id:
+              schema:
+                type: string
+              description: 'Identifies this request. Quote it when you contact Yama
+                support about this request. Treat it as an opaque string: its format
+                may change.'
         '403':
           description: No credentials were sent, or the key lacks the permission this
             operation needs.
@@ -1137,6 +1452,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+          headers:
+            Request-Id:
+              schema:
+                type: string
+              description: 'Identifies this request. Quote it when you contact Yama
+                support about this request. Treat it as an opaque string: its format
+                may change.'
         '404':
           description: No such object within the caller's reach (another account's
             looks the same).
@@ -1144,12 +1466,26 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+          headers:
+            Request-Id:
+              schema:
+                type: string
+              description: 'Identifies this request. Quote it when you contact Yama
+                support about this request. Treat it as an opaque string: its format
+                may change.'
         '429':
           description: 'Rate limited: retry after the `Retry-After` header''s seconds.'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+          headers:
+            Request-Id:
+              schema:
+                type: string
+              description: 'Identifies this request. Quote it when you contact Yama
+                support about this request. Treat it as an opaque string: its format
+                may change.'
       x-api-key-permission: codes:write
     patch:
       operationId: codes_partial_update
@@ -1182,12 +1518,26 @@ paths:
               schema:
                 $ref: '#/components/schemas/AccessCode'
           description: ''
+          headers:
+            Request-Id:
+              schema:
+                type: string
+              description: 'Identifies this request. Quote it when you contact Yama
+                support about this request. Treat it as an opaque string: its format
+                may change.'
         '400':
           description: A field or query parameter is invalid, blank or unknown.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ValidationError'
+          headers:
+            Request-Id:
+              schema:
+                type: string
+              description: 'Identifies this request. Quote it when you contact Yama
+                support about this request. Treat it as an opaque string: its format
+                may change.'
         '401':
           description: The API key is malformed, unknown, deleted or expired, or no
             key followed `Bearer`.
@@ -1195,6 +1545,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+          headers:
+            Request-Id:
+              schema:
+                type: string
+              description: 'Identifies this request. Quote it when you contact Yama
+                support about this request. Treat it as an opaque string: its format
+                may change.'
         '403':
           description: No credentials were sent, or the key lacks the permission this
             operation needs.
@@ -1202,6 +1559,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+          headers:
+            Request-Id:
+              schema:
+                type: string
+              description: 'Identifies this request. Quote it when you contact Yama
+                support about this request. Treat it as an opaque string: its format
+                may change.'
         '404':
           description: No such object within the caller's reach (another account's
             looks the same).
@@ -1209,12 +1573,26 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+          headers:
+            Request-Id:
+              schema:
+                type: string
+              description: 'Identifies this request. Quote it when you contact Yama
+                support about this request. Treat it as an opaque string: its format
+                may change.'
         '429':
           description: 'Rate limited: retry after the `Retry-After` header''s seconds.'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+          headers:
+            Request-Id:
+              schema:
+                type: string
+              description: 'Identifies this request. Quote it when you contact Yama
+                support about this request. Treat it as an opaque string: its format
+                may change.'
       x-api-key-permission: codes:write
     delete:
       operationId: codes_destroy
@@ -1238,6 +1616,13 @@ paths:
       responses:
         '204':
           description: No response body
+          headers:
+            Request-Id:
+              schema:
+                type: string
+              description: 'Identifies this request. Quote it when you contact Yama
+                support about this request. Treat it as an opaque string: its format
+                may change.'
         '401':
           description: The API key is malformed, unknown, deleted or expired, or no
             key followed `Bearer`.
@@ -1245,6 +1630,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+          headers:
+            Request-Id:
+              schema:
+                type: string
+              description: 'Identifies this request. Quote it when you contact Yama
+                support about this request. Treat it as an opaque string: its format
+                may change.'
         '403':
           description: No credentials were sent, or the key lacks the permission this
             operation needs.
@@ -1252,6 +1644,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+          headers:
+            Request-Id:
+              schema:
+                type: string
+              description: 'Identifies this request. Quote it when you contact Yama
+                support about this request. Treat it as an opaque string: its format
+                may change.'
         '404':
           description: No such object within the caller's reach (another account's
             looks the same).
@@ -1259,12 +1658,26 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+          headers:
+            Request-Id:
+              schema:
+                type: string
+              description: 'Identifies this request. Quote it when you contact Yama
+                support about this request. Treat it as an opaque string: its format
+                may change.'
         '429':
           description: 'Rate limited: retry after the `Retry-After` header''s seconds.'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+          headers:
+            Request-Id:
+              schema:
+                type: string
+              description: 'Identifies this request. Quote it when you contact Yama
+                support about this request. Treat it as an opaque string: its format
+                may change.'
       x-api-key-permission: codes:write
   /api/v2/contacts/:
     get:
@@ -1320,12 +1733,26 @@ paths:
               schema:
                 $ref: '#/components/schemas/PaginatedContactList'
           description: ''
+          headers:
+            Request-Id:
+              schema:
+                type: string
+              description: 'Identifies this request. Quote it when you contact Yama
+                support about this request. Treat it as an opaque string: its format
+                may change.'
         '400':
           description: A field or query parameter is invalid, blank or unknown.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ValidationError'
+          headers:
+            Request-Id:
+              schema:
+                type: string
+              description: 'Identifies this request. Quote it when you contact Yama
+                support about this request. Treat it as an opaque string: its format
+                may change.'
         '401':
           description: The API key is malformed, unknown, deleted or expired, or no
             key followed `Bearer`.
@@ -1333,6 +1760,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+          headers:
+            Request-Id:
+              schema:
+                type: string
+              description: 'Identifies this request. Quote it when you contact Yama
+                support about this request. Treat it as an opaque string: its format
+                may change.'
         '403':
           description: No credentials were sent, or the key lacks the permission this
             operation needs.
@@ -1340,12 +1774,26 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+          headers:
+            Request-Id:
+              schema:
+                type: string
+              description: 'Identifies this request. Quote it when you contact Yama
+                support about this request. Treat it as an opaque string: its format
+                may change.'
         '429':
           description: 'Rate limited: retry after the `Retry-After` header''s seconds.'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+          headers:
+            Request-Id:
+              schema:
+                type: string
+              description: 'Identifies this request. Quote it when you contact Yama
+                support about this request. Treat it as an opaque string: its format
+                may change.'
       x-api-key-permission: contacts:read
   /api/v2/contacts/{uuid}/:
     get:
@@ -1374,6 +1822,13 @@ paths:
               schema:
                 $ref: '#/components/schemas/Contact'
           description: ''
+          headers:
+            Request-Id:
+              schema:
+                type: string
+              description: 'Identifies this request. Quote it when you contact Yama
+                support about this request. Treat it as an opaque string: its format
+                may change.'
         '401':
           description: The API key is malformed, unknown, deleted or expired, or no
             key followed `Bearer`.
@@ -1381,6 +1836,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+          headers:
+            Request-Id:
+              schema:
+                type: string
+              description: 'Identifies this request. Quote it when you contact Yama
+                support about this request. Treat it as an opaque string: its format
+                may change.'
         '403':
           description: No credentials were sent, or the key lacks the permission this
             operation needs.
@@ -1388,6 +1850,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+          headers:
+            Request-Id:
+              schema:
+                type: string
+              description: 'Identifies this request. Quote it when you contact Yama
+                support about this request. Treat it as an opaque string: its format
+                may change.'
         '404':
           description: No such object within the caller's reach (another account's
             looks the same).
@@ -1395,12 +1864,26 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+          headers:
+            Request-Id:
+              schema:
+                type: string
+              description: 'Identifies this request. Quote it when you contact Yama
+                support about this request. Treat it as an opaque string: its format
+                may change.'
         '429':
           description: 'Rate limited: retry after the `Retry-After` header''s seconds.'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+          headers:
+            Request-Id:
+              schema:
+                type: string
+              description: 'Identifies this request. Quote it when you contact Yama
+                support about this request. Treat it as an opaque string: its format
+                may change.'
       x-api-key-permission: contacts:read
   /api/v2/units/:
     get:
@@ -1479,12 +1962,26 @@ paths:
               schema:
                 $ref: '#/components/schemas/PaginatedUnitList'
           description: ''
+          headers:
+            Request-Id:
+              schema:
+                type: string
+              description: 'Identifies this request. Quote it when you contact Yama
+                support about this request. Treat it as an opaque string: its format
+                may change.'
         '400':
           description: A field or query parameter is invalid, blank or unknown.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ValidationError'
+          headers:
+            Request-Id:
+              schema:
+                type: string
+              description: 'Identifies this request. Quote it when you contact Yama
+                support about this request. Treat it as an opaque string: its format
+                may change.'
         '401':
           description: The API key is malformed, unknown, deleted or expired, or no
             key followed `Bearer`.
@@ -1492,6 +1989,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+          headers:
+            Request-Id:
+              schema:
+                type: string
+              description: 'Identifies this request. Quote it when you contact Yama
+                support about this request. Treat it as an opaque string: its format
+                may change.'
         '403':
           description: No credentials were sent, or the key lacks the permission this
             operation needs.
@@ -1499,12 +2003,26 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+          headers:
+            Request-Id:
+              schema:
+                type: string
+              description: 'Identifies this request. Quote it when you contact Yama
+                support about this request. Treat it as an opaque string: its format
+                may change.'
         '429':
           description: 'Rate limited: retry after the `Retry-After` header''s seconds.'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+          headers:
+            Request-Id:
+              schema:
+                type: string
+              description: 'Identifies this request. Quote it when you contact Yama
+                support about this request. Treat it as an opaque string: its format
+                may change.'
       x-api-key-permission: units:read
   /api/v2/units/{uuid}/:
     get:
@@ -1533,6 +2051,13 @@ paths:
               schema:
                 $ref: '#/components/schemas/Unit'
           description: ''
+          headers:
+            Request-Id:
+              schema:
+                type: string
+              description: 'Identifies this request. Quote it when you contact Yama
+                support about this request. Treat it as an opaque string: its format
+                may change.'
         '401':
           description: The API key is malformed, unknown, deleted or expired, or no
             key followed `Bearer`.
@@ -1540,6 +2065,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+          headers:
+            Request-Id:
+              schema:
+                type: string
+              description: 'Identifies this request. Quote it when you contact Yama
+                support about this request. Treat it as an opaque string: its format
+                may change.'
         '403':
           description: No credentials were sent, or the key lacks the permission this
             operation needs.
@@ -1547,6 +2079,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+          headers:
+            Request-Id:
+              schema:
+                type: string
+              description: 'Identifies this request. Quote it when you contact Yama
+                support about this request. Treat it as an opaque string: its format
+                may change.'
         '404':
           description: No such object within the caller's reach (another account's
             looks the same).
@@ -1554,12 +2093,26 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+          headers:
+            Request-Id:
+              schema:
+                type: string
+              description: 'Identifies this request. Quote it when you contact Yama
+                support about this request. Treat it as an opaque string: its format
+                may change.'
         '429':
           description: 'Rate limited: retry after the `Retry-After` header''s seconds.'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+          headers:
+            Request-Id:
+              schema:
+                type: string
+              description: 'Identifies this request. Quote it when you contact Yama
+                support about this request. Treat it as an opaque string: its format
+                may change.'
       x-api-key-permission: units:read
 components:
   schemas:
@@ -1576,7 +2129,9 @@ components:
           description: The unit's `uuid`.
         code:
           type: string
+          pattern: ^[0-9]{3,15}$
           maxLength: 15
+          minLength: 3
         name:
           type: string
           nullable: true
@@ -1598,7 +2153,8 @@ components:
           description: The unit's `uuid`.
         code:
           type: string
-          minLength: 1
+          minLength: 3
+          pattern: ^[0-9]{3,15}$
           maxLength: 15
         name:
           type: string
@@ -2128,7 +2684,8 @@ components:
           description: The unit's `uuid`.
         code:
           type: string
-          minLength: 1
+          minLength: 3
+          pattern: ^[0-9]{3,15}$
           maxLength: 15
         name:
           type: string
