@@ -1,0 +1,2159 @@
+openapi: 3.0.3
+info:
+  title: Yama REST API
+  version: v2
+  description: |-
+    The Yama REST API lets your integration manage a building's access codes and read its call log. This guide covers getting an API key, authenticating, the conventions every endpoint follows, and worked examples in curl and Python.
+
+    What the API covers:
+
+    | Resource | Through the API |
+    |---|---|
+    | Access codes | List, create, read, update, delete, including expiry |
+    | Call log | Read calls by date range, across your units or for one unit or building |
+    | Buildings, units, contacts | Read only |
+    | Your API key | Read its own permissions and unit access |
+
+    ## 1. Get an API key
+
+    The Account Holder creates keys in the portal, under **Settings › API keys**; Yama staff don't issue them. A key is shown once, when it's created. Yama keeps only a hash of it, so a lost key can't be recovered: create a new one. Store it in a secret manager, not in source control, and treat it as an opaque string.
+
+    Each key has:
+
+    - **Unit access:** all your units, the units in selected buildings, or selected units. The first two include units you get later.
+    - **Permissions,** set per resource:
+      - **Access codes:** read, or read and write (create, edit and delete).
+      - **Contacts:** read.
+      - **Call log:** read.
+      - **Buildings:** read.
+
+      Any Access codes, Contacts or Call log permission also lets the key read units and buildings, since you need a unit's `uuid` to use the others.
+    - **An expiry,** or none.
+
+    Give a key only what the integration needs. A key acts for the Account Holder who created it, never reaches more than they can, and stops working if their account is deactivated. `GET /api/v2/api-key/` shows what a key can do (see step 2).
+
+    **Rotating:** create a new key, switch your integration to it, then delete the old one. Keys can overlap, so there's no downtime. A deleted key stops working on the next request.
+
+    ## 2. Authenticate
+
+    Send the key as a Bearer token on every request:
+
+    ```sh
+    export YAMA_API_BASE_URL=https://app.getyama.ca
+    read -rs YAMA_API_KEY && export YAMA_API_KEY   # paste the key; it is not echoed
+
+    curl -s -H "Authorization: Bearer $YAMA_API_KEY" "$YAMA_API_BASE_URL/api/v2/units/?limit=2"
+    ```
+
+    ```json
+    {
+      "count": 11,
+      "next": "https://app.getyama.ca/api/v2/units/?limit=2&offset=2",
+      "previous": null,
+      "results": [
+        {"uuid": "dd1053d5-0a4b-4c0d-a619-6a1457d97de6", "building": "5f0c3b8e-8a52-4a38-9f57-1d2b6c0e4a11", "name": "Unit 101", "door_digit": "9", "dial_in_number": "+12365550100"},
+        {"uuid": "b01167b0-82b6-410d-b793-202b88aaadb6", "building": "5f0c3b8e-8a52-4a38-9f57-1d2b6c0e4a11", "name": "Unit 105", "door_digit": "9", "dial_in_number": "+12365550100"}
+      ]
+    }
+    ```
+
+    - The scheme name is case-insensitive (`Bearer` or `bearer`). Requests with a key need no CSRF token or cookie.
+    - Use HTTPS. Never put the key in a URL.
+
+    ### Check what your key can do
+
+    Any valid key can read its own record, whatever its permissions:
+
+    ```sh
+    curl -s -H "Authorization: Bearer $YAMA_API_KEY" "$YAMA_API_BASE_URL/api/v2/api-key/"
+    ```
+
+    ```json
+    {
+      "uuid": "d6aa1973-6516-4035-8e52-b4d932c6e407",
+      "name": "Doorbell",
+      "created_at": "2026-10-14T20:23:57.294919Z",
+      "expires_at": "2026-11-13T20:23:57.294442Z",
+      "last_used_at": "2026-10-14T20:24:28.772111Z",
+      "permissions": {
+        "codes": "write",
+        "contacts": "none",
+        "call_log": "read",
+        "buildings": "read"
+      },
+      "scopes": [
+        "buildings:read",
+        "call_log:read",
+        "codes:read",
+        "codes:write",
+        "units:read"
+      ],
+      "unit_access": {
+        "type": "all",
+        "buildings": [],
+        "units": []
+      }
+    }
+    ```
+
+    - `permissions` lists every resource with `none`, `read` or `write`.
+    - `scopes` spells out what the key can do, with the same strings each operation in the API reference names (`codes:read`, `units:read`, and so on). Reading units and buildings is granted by any Access codes, Contacts or Call log permission, so `scopes` can include `buildings:read` even where `permissions.buildings` is `none`.
+    - `unit_access.type` is `all`, `buildings` or `units`. `unit_access.units` lists only the selected units you still own, and `unit_access.buildings` only the selected buildings you still own. Every unit names its `building`, so `GET /api/v2/units/?building=<uuid>` shows which units a selected building covers.
+    - `expires_at` is `null` for a key that never expires. All times are UTC.
+    - A portal session has no key, so it gets 404 here.
+
+    ## 3. Conventions
+
+    ### Times are UTC
+
+    Every time the API returns is UTC, in ISO 8601 ending in `Z` (for example `2026-11-01T00:00:00Z`). Times you send are read as UTC too: a time with an offset is converted (`2026-11-15T18:00:00-07:00` is stored as `2026-11-16T01:00:00Z`), and a time without one is taken as UTC. Dates, such as the call log's `start` and `end`, are UTC calendar days. The API never uses a building's local time zone; convert for display in your own code.
+
+    ### Pagination
+
+    Every list returns a page envelope:
+
+    ```json
+    {"count": 11, "next": "https://app.getyama.ca/api/v2/units/?limit=2&offset=2", "previous": null, "results": [...]}
+    ```
+
+    - `limit` is the page size: 100 by default, 1 to 500. `offset` is how many items to skip. A value out of range or not a whole number is a `400`.
+    - `count` is the total number of matching items. `next` and `previous` are full URLs, or `null` at either end. Follow `next` until it is `null` rather than building URLs yourself.
+    - Filters such as `?unit=<unit uuid>` apply before pagination.
+    - Items come in a stable order (calls newest first), but a page shifts if items are added or removed while you page. This matters most for the call log, because new calls keep arriving at the top: a call can show up on two pages. Page a date range that has already ended, or skip calls whose `uuid` you've already seen (see example 6).
+
+    ### Fields
+
+    - Request bodies are JSON, sent with `Content-Type: application/json`.
+    - Send only the fields the operation takes. Fields marked read-only in the API reference (such as `uuid`, which Yama assigns and returns) and fields the API doesn't know are a `400` (see Errors below), so nothing you send is silently dropped.
+    - Ignore response fields you don't recognise: new fields can be added at any time.
+    - Objects are identified by `uuid` everywhere, including in filters (`?unit=<unit uuid>`) and in the `unit` field of a code.
+
+    ### Errors
+
+    Errors use standard HTTP status codes with a JSON body. Request-level errors have a `detail` string; validation errors (400) map each field to a list of messages.
+
+    - **400:** a field or query parameter has a bad value, such as `{"expires_at": ["Expiry must be in the future."]}`, or the operation doesn't take that query parameter (often a typo): `{"buildling": ["Unknown query parameter."]}`. The same goes for the body: `{"uuid": ["This field is read-only."]}` or `{"colour": ["Unknown field."]}`. Creating a code on a unit outside the key's unit access reads `{"unit": ["Unit does not exist."]}`.
+    - **401:** the key is malformed, unknown, deleted or expired, or its owner was deactivated: `{"detail": "Invalid API key."}` or `{"detail": "API key expired."}`. `Authorization: Bearer` with nothing after it gets `{"detail": "No API key was sent after Bearer."}`. Every 401 carries `WWW-Authenticate: Bearer realm="api"`.
+    - **403:** no credentials were sent, `{"detail": "Authentication credentials were not provided."}`, or the key's permission is too low for the resource and method: `{"detail": "This API key does not grant Contacts: Read."}`. The permission check runs before any lookup, so a 403 never reveals whether an object exists.
+    - **404:** the object doesn't exist, belongs to someone else, or is outside the key's unit access. These look the same on purpose: `{"detail": "No Unit matches the given query."}`.
+    - **405:** the endpoint doesn't offer this method; everything but access codes is read-only: `{"detail": "Method \"PATCH\" not allowed."}`.
+    - **415:** the body isn't JSON, such as a form-encoded or multipart request: `{"detail": "Unsupported media type \"application/x-www-form-urlencoded\" in request."}`.
+    - **429:** too many requests (see Rate limits below): `{"detail": "Request was throttled. Expected available in 12 seconds."}`.
+
+    Retry only on 5xx, 429 or network errors, with backoff. Any other 4xx won't succeed unchanged.
+
+    ### Rate limits
+
+    Every `/api/v2/` request counts, the schema and docs pages included. Each API key has its own allowance, and a portal session has its own allowance per user, so a key and a session belonging to the same person don't share a count, and two keys don't either. Two limits apply at once:
+
+    - **Sustained:** 600 requests per minute (10 per second on average), room for a full paginated sync of units, codes and call logs.
+    - **Burst:** 20 requests per second, which stops a runaway loop within a second or two.
+
+    Requests over a limit get `429 Too Many Requests` with a `Retry-After` header (whole seconds) and the usual `API-Version` header; the body is `{"detail": "Request was throttled. Expected available in 12 seconds."}`. Wait the `Retry-After` time, then retry; don't retry in a tight loop. Rejected requests (401 or 403) don't count against a key. Contact Yama if your integration needs higher limits.
+
+    ### Versioning and compatibility
+
+    The version is in the path (`/api/v2/`), and every response, errors included, carries an `API-Version: v2` header. `GET /api/` lists the available versions:
+
+    ```json
+    {"current": "v2", "versions": [{"version": "v2", "status": "current", "url": "https://app.getyama.ca/api/v2/"}]}
+    ```
+
+    Within v2, changes are additive only: new endpoints, new optional inputs, new response fields and new filters. Anything that could break a working client, such as removing or renaming a field or endpoint, changing a type or meaning, adding a required input or tightening validation, ships as a new version (`/api/v3/`), and v2 keeps running for the notice period in Yama's Terms of Service. Write your client to ignore unknown fields and it will keep working across additive changes.
+
+    ## 4. Worked examples
+
+    These examples ran against a Yama test server with a key holding **Access codes: Read and write** and **Call log: Read** on all units; the responses below are what it returned, with the host replaced by `app.getyama.ca`. Your UUIDs will differ. The curl examples assume `YAMA_API_BASE_URL` and `YAMA_API_KEY` are set as in step 2.
+
+    ### 1. List your buildings, then a building's units
+
+    ```sh
+    curl -s -H "Authorization: Bearer $YAMA_API_KEY" "$YAMA_API_BASE_URL/api/v2/buildings/"
+    ```
+
+    ```json
+    {
+      "count": 1,
+      "next": null,
+      "previous": null,
+      "results": [
+        {"uuid": "5f0c3b8e-8a52-4a38-9f57-1d2b6c0e4a11", "name": "The Manhattan", "address": "123 Main St, Vancouver, BC", "caller_id": "+16045550123", "unit_count": 11}
+      ]
+    }
+    ```
+
+    `caller_id` is the number the building's intercom calls from. `unit_count` counts only the units your key can reach, and a building with none of them shows `0` with an All-units key or a session. Then list that building's units:
+
+    ```sh
+    BUILDING=5f0c3b8e-8a52-4a38-9f57-1d2b6c0e4a11
+    curl -s -H "Authorization: Bearer $YAMA_API_KEY" "$YAMA_API_BASE_URL/api/v2/units/?building=$BUILDING"
+    ```
+
+    A building you can't see, or one that doesn't exist, gives an empty list rather than an error. The next examples work on one unit from that list:
+
+    ```sh
+    UNIT=dd1053d5-0a4b-4c0d-a619-6a1457d97de6   # a unit's uuid
+    ```
+
+    ### 2. List a unit's codes
+
+    ```sh
+    curl -s -H "Authorization: Bearer $YAMA_API_KEY" "$YAMA_API_BASE_URL/api/v2/codes/?unit=$UNIT"
+    ```
+
+    ```json
+    {
+      "count": 2,
+      "next": null,
+      "previous": null,
+      "results": [
+        {"uuid": "df28e707-d9da-4b0d-9a26-5d5940f61cd2", "unit": "dd1053d5-0a4b-4c0d-a619-6a1457d97de6", "code": "1234", "name": "Primary Code", "expires_at": null},
+        {"uuid": "437be33d-4f64-4c16-8766-c4ba551e47b7", "unit": "dd1053d5-0a4b-4c0d-a619-6a1457d97de6", "code": "5678", "name": "Visitor Code", "expires_at": "2026-10-03T22:06:26.908021Z"}
+      ]
+    }
+    ```
+
+    `expires_at` is `null` for a code that never expires. An expired code is still listed but no longer opens the door. Without `?unit=`, the list covers every unit the key can reach.
+
+    ### 3. Create a code with an expiry
+
+    ```sh
+    curl -s -X POST "$YAMA_API_BASE_URL/api/v2/codes/" \
+      -H "Authorization: Bearer $YAMA_API_KEY" \
+      -H "Content-Type: application/json" \
+      -d "{\"unit\": \"$UNIT\", \"name\": \"Dog walker\", \"code\": \"482915\", \"expires_at\": \"2026-11-01T00:00:00Z\"}"
+    ```
+
+    `201 Created`:
+
+    ```json
+    {"uuid": "1dc19ab9-2785-4999-930a-0096ce94c485", "unit": "dd1053d5-0a4b-4c0d-a619-6a1457d97de6", "code": "482915", "name": "Dog walker", "expires_at": "2026-11-01T00:00:00Z"}
+    ```
+
+    - `code` is 3 to 15 digits and must be unique on the unit. `name` is optional. Leave `expires_at` out, or send `null`, for a code that never expires.
+    - `expires_at` must be in the future. The code works up to and including that instant and stops after it.
+    - Keep the returned `uuid`: it is how you edit or delete the code.
+
+    A code the unit already has:
+
+    ```json
+    {"code": ["Access code already exists for this unit."]}
+    ```
+
+    ### 4. Edit a code, and change or clear its expiry
+
+    `PATCH` changes only the fields you send. Set `CODE` to the `uuid` from the create response.
+
+    Move the expiry. A time with an offset is converted to UTC:
+
+    ```sh
+    curl -s -X PATCH "$YAMA_API_BASE_URL/api/v2/codes/$CODE/" \
+      -H "Authorization: Bearer $YAMA_API_KEY" \
+      -H "Content-Type: application/json" \
+      -d '{"expires_at": "2026-11-15T18:00:00-07:00"}'
+    ```
+
+    ```json
+    {"uuid": "1dc19ab9-2785-4999-930a-0096ce94c485", "unit": "dd1053d5-0a4b-4c0d-a619-6a1457d97de6", "code": "482915", "name": "Dog walker", "expires_at": "2026-11-16T01:00:00Z"}
+    ```
+
+    Rename it. Leaving `expires_at` out leaves the expiry as it was:
+
+    ```sh
+    curl -s -X PATCH "$YAMA_API_BASE_URL/api/v2/codes/$CODE/" \
+      -H "Authorization: Bearer $YAMA_API_KEY" \
+      -H "Content-Type: application/json" \
+      -d '{"name": "Dog walker (Mon-Fri)"}'
+    ```
+
+    ```json
+    {"uuid": "1dc19ab9-2785-4999-930a-0096ce94c485", "unit": "dd1053d5-0a4b-4c0d-a619-6a1457d97de6", "code": "482915", "name": "Dog walker (Mon-Fri)", "expires_at": "2026-11-16T01:00:00Z"}
+    ```
+
+    Clear the expiry, so the code never expires, by sending `null`:
+
+    ```sh
+    curl -s -X PATCH "$YAMA_API_BASE_URL/api/v2/codes/$CODE/" \
+      -H "Authorization: Bearer $YAMA_API_KEY" \
+      -H "Content-Type: application/json" \
+      -d '{"expires_at": null}'
+    ```
+
+    ```json
+    {"uuid": "1dc19ab9-2785-4999-930a-0096ce94c485", "unit": "dd1053d5-0a4b-4c0d-a619-6a1457d97de6", "code": "482915", "name": "Dog walker (Mon-Fri)", "expires_at": null}
+    ```
+
+    A time in the past is a `400`:
+
+    ```json
+    {"expires_at": ["Expiry must be in the future."]}
+    ```
+
+    The one exception: sending back a code's current `expires_at` unchanged is accepted even after it has passed, so you can `PUT` back a code you fetched earlier. `PUT` takes the whole code (`unit` and `code` are required); like `PATCH`, it leaves the expiry alone unless you send `expires_at`.
+
+    ### 5. Delete a code
+
+    ```sh
+    curl -s -i -X DELETE "$YAMA_API_BASE_URL/api/v2/codes/$CODE/" \
+      -H "Authorization: Bearer $YAMA_API_KEY"
+    ```
+
+    ```
+    HTTP/1.1 204 No Content
+    API-Version: v2
+    ```
+
+    The code stops working immediately. Fetching it afterwards is a `404`:
+
+    ```json
+    {"detail": "No AccessCode matches the given query."}
+    ```
+
+    ### 6. Fetch a unit's calls for a date range
+
+    `GET /api/v2/calls/` lists calls on every unit your key reaches. Narrow it with `?unit=<unit uuid>` or `?building=<building uuid>` (the building whose intercom placed the call); a unit or building you can't see gives an empty list. `start` and `end` are UTC dates, inclusive, and must be sent together. Without them you get the last 30 UTC days, today included. `result` filters by outcome (`code_accepted`, `forwarded`, `code_not_accepted`, `hung_up`, `error`, `in_progress`, `rejected`, `not_recorded`).
+
+    ```sh
+    curl -s -G "$YAMA_API_BASE_URL/api/v2/calls/" \
+      -H "Authorization: Bearer $YAMA_API_KEY" \
+      --data-urlencode "unit=$UNIT" \
+      --data-urlencode "start=2026-10-01" \
+      --data-urlencode "end=2026-10-31" \
+      --data-urlencode "limit=2"
+    ```
+
+    ```json
+    {
+      "count": 4,
+      "next": "https://app.getyama.ca/api/v2/calls/?end=2026-10-31&limit=2&offset=2&start=2026-10-01&unit=dd1053d5-0a4b-4c0d-a619-6a1457d97de6",
+      "previous": null,
+      "results": [
+        {
+          "uuid": "0c9c3da7-30bd-4be3-b810-bb639d439e1d",
+          "unit": "dd1053d5-0a4b-4c0d-a619-6a1457d97de6",
+          "building": "5f0c3b8e-8a52-4a38-9f57-1d2b6c0e4a11",
+          "reference": "7DCD03",
+          "started_at": "2026-10-10T22:09:11.312885Z",
+          "duration_seconds": 11,
+          "result": "code_not_accepted",
+          "result_label": "Not accepted",
+          "summary": "5678 · Expired",
+          "imported": false,
+          "steps": [
+            {"kind": "received", "at": "2026-10-10T22:09:11.320322Z", "text": "Call started", "attempt_result": null, "entered_digits": null, "code_name": null, "contact_name": null, "dial_status": null},
+            {"kind": "input", "at": "2026-10-10T22:09:11.634815Z", "text": "Code entered: 5678 · Expired", "attempt_result": "expired", "entered_digits": "5678", "code_name": null, "contact_name": null, "dial_status": null},
+            {"kind": "completed", "at": "2026-10-10T22:09:11.785620Z", "text": "Call ended", "attempt_result": null, "entered_digits": null, "code_name": null, "contact_name": null, "dial_status": null}
+          ]
+        },
+        {
+          "uuid": "4fb1ec83-5c6f-44a5-992b-aff30fe48f03",
+          "unit": "dd1053d5-0a4b-4c0d-a619-6a1457d97de6",
+          "building": "5f0c3b8e-8a52-4a38-9f57-1d2b6c0e4a11",
+          "reference": "46A8E1",
+          "started_at": "2026-10-10T22:09:10.438762Z",
+          "duration_seconds": 55,
+          "result": "forwarded",
+          "result_label": "Forwarded",
+          "summary": "Forwarded to a contact · Answered",
+          "imported": false,
+          "steps": [
+            {"kind": "received", "at": "2026-10-10T22:09:10.442333Z", "text": "Call started", "attempt_result": null, "entered_digits": null, "code_name": null, "contact_name": null, "dial_status": null},
+            {"kind": "dial_started", "at": "2026-10-10T22:09:10.663861Z", "text": "Forwarded to a contact", "attempt_result": null, "entered_digits": null, "code_name": null, "contact_name": null, "dial_status": null},
+            {"kind": "dial_ended", "at": "2026-10-10T22:09:10.837512Z", "text": "Answered", "attempt_result": null, "entered_digits": null, "code_name": null, "contact_name": null, "dial_status": "completed"},
+            {"kind": "completed", "at": "2026-10-10T22:09:11.041793Z", "text": "Call ended", "attempt_result": null, "entered_digits": null, "code_name": null, "contact_name": null, "dial_status": null}
+          ]
+        }
+      ]
+    }
+    ```
+
+    Request `next` as it is, with the same header, until it is `null`. It keeps your filters:
+
+    ```sh
+    NEXT="<the next URL from the previous response>"   # or: ... | jq -r .next
+    curl -s -H "Authorization: Bearer $YAMA_API_KEY" "$NEXT"
+    ```
+
+    ```json
+    {
+      "count": 4,
+      "next": null,
+      "previous": "https://app.getyama.ca/api/v2/calls/?end=2026-10-31&limit=2&start=2026-10-01&unit=dd1053d5-0a4b-4c0d-a619-6a1457d97de6",
+      "results": [
+        {"uuid": "9de1afc1-2158-4680-9c94-f0c2229d513a", "reference": "6A26E5", "started_at": "2026-10-10T22:09:09.743719Z", "duration_seconds": 22, "result": "code_not_accepted", "result_label": "Not accepted", "summary": "9999 · Not accepted", "imported": false, "steps": ["...3 steps..."]},
+        {"uuid": "793289bc-6f58-4c7b-bd54-c4365953278b", "reference": "E191C4", "started_at": "2026-10-10T22:09:08.902359Z", "duration_seconds": 14, "result": "code_accepted", "result_label": "Accepted", "summary": "Primary Code · Accepted", "imported": false, "steps": ["...4 steps..."]}
+      ]
+    }
+    ```
+
+    (Shortened here: each call's `unit`, `building` and full `steps` are left out; the server returns them.)
+
+    Reading the call log:
+
+    - `count` is the number of calls in the date range and filters, not the page size.
+    - `unit` and `building` are the call's unit and the building whose intercom placed it, as at call time (`building` is `null` for a unit outside any building). `GET /api/v2/calls/{uuid}/` returns one call in the same shape, whatever its date.
+    - `reference` is the call reference the portal shows. `result` is for code; `result_label`, `summary` and each step's `text` are the portal's wording, for display.
+    - `duration_seconds` is `null` while a call is in progress or when it wasn't recorded. `imported` is `true` for calls rebuilt from the phone carrier's records, which have fewer details.
+    - Step facts are `null` when they don't apply: `attempt_result` (`accepted`, `not_accepted`, `expired`, `retired`, `refused`) on code entries; `entered_digits` on failed attempts only; `code_name` on accepted attempts; `contact_name` on forwarding steps; `dial_status` on the end of a forward.
+    - **What your key sees.** Without Access codes: Read, `code_name` and `entered_digits` are `null` and the text says "A code" and "(hidden)". Without Contacts: Read, `contact_name` is `null` and the text says "a contact". That's why the example above, from a key without Contacts, says "Forwarded to a contact".
+    - The log shows only calls from while you owned the unit, on units that are still active. Phone numbers, full call identifiers and accepted codes' digits are never included.
+    - A bad date is a `400`, for example `{"end": ["Enter both dates."]}` when only `start` is sent.
+
+    ### The same workflows in Python
+
+    With [requests](https://requests.readthedocs.io/), and `YAMA_API_BASE_URL` and `YAMA_API_KEY` in the environment:
+
+    ```python
+    import os
+
+    import requests
+
+    BASE_URL = os.environ["YAMA_API_BASE_URL"]  # e.g. https://app.getyama.ca
+    API = f"{BASE_URL}/api/v2"
+
+    session = requests.Session()
+    session.headers["Authorization"] = f"Bearer {os.environ['YAMA_API_KEY']}"
+
+
+    def check(response):
+        if not response.ok:
+            raise RuntimeError(f"{response.status_code} {response.request.method} {response.url}: {response.text}")
+        return response
+
+
+    def list_all(url, **params):
+        """Yield every item of a paginated list, following `next`."""
+        while url:
+            page = check(session.get(url, params=params)).json()
+            yield from page["results"]
+            url, params = page["next"], None  # `next` already carries the query
+
+
+    # 1. Your buildings, then a unit in the first one that has any
+    building = next(b for b in list_all(f"{API}/buildings/") if b["unit_count"])
+    unit = next(list_all(f"{API}/units/", building=building["uuid"]))
+    print("unit:", unit["uuid"], unit["name"])
+
+    # 2. List a unit's codes
+    for code in list_all(f"{API}/codes/", unit=unit["uuid"]):
+        print("code:", code["name"], code["code"], code["expires_at"])
+
+    # 3. Create a code that expires at a UTC instant
+    created = check(
+        session.post(
+            f"{API}/codes/",
+            json={"unit": unit["uuid"], "name": "Dog walker", "code": "482915", "expires_at": "2026-11-01T00:00:00Z"},
+        )
+    ).json()
+    print("created:", created)
+    code_url = f"{API}/codes/{created['uuid']}/"
+
+    # 4. Change the expiry, then clear it with null
+    print("changed:", check(session.patch(code_url, json={"expires_at": "2026-11-15T00:00:00Z"})).json())
+    print("cleared:", check(session.patch(code_url, json={"expires_at": None})).json())
+
+    # A 400 carries field errors
+    bad = session.patch(code_url, json={"expires_at": "2020-01-01T00:00:00Z"})
+    print("rejected:", bad.status_code, bad.json())
+
+    # 5. Delete it
+    check(session.delete(code_url))
+    print("deleted, now:", session.get(code_url).status_code)
+
+    # 6. A unit's calls for a range of UTC days, all pages
+    for call in list_all(f"{API}/calls/", unit=unit["uuid"], start="2026-10-01", end="2026-10-31", limit=2):
+        print("call:", call["started_at"], call["reference"], call["result"], call["summary"])
+    ```
+
+    Output:
+
+    ```
+    unit: dd1053d5-0a4b-4c0d-a619-6a1457d97de6 Unit 101
+    code: Primary Code 1234 None
+    code: Visitor Code 5678 2026-10-03T22:06:26.908021Z
+    created: {'uuid': '1954b376-dceb-4f8e-9411-1c4853df4a21', 'unit': 'dd1053d5-0a4b-4c0d-a619-6a1457d97de6', 'code': '482915', 'name': 'Dog walker', 'expires_at': '2026-11-01T00:00:00Z'}
+    changed: {'uuid': '1954b376-dceb-4f8e-9411-1c4853df4a21', 'unit': 'dd1053d5-0a4b-4c0d-a619-6a1457d97de6', 'code': '482915', 'name': 'Dog walker', 'expires_at': '2026-11-15T00:00:00Z'}
+    cleared: {'uuid': '1954b376-dceb-4f8e-9411-1c4853df4a21', 'unit': 'dd1053d5-0a4b-4c0d-a619-6a1457d97de6', 'code': '482915', 'name': 'Dog walker', 'expires_at': None}
+    rejected: 400 {'expires_at': ['Expiry must be in the future.']}
+    deleted, now: 404
+    call: 2026-10-10T22:09:11.312885Z 7DCD03 code_not_accepted 5678 · Expired
+    call: 2026-10-10T22:09:10.438762Z 46A8E1 forwarded Forwarded to a contact · Answered
+    call: 2026-10-10T22:09:09.743719Z 6A26E5 code_not_accepted 9999 · Not accepted
+    call: 2026-10-10T22:09:08.902359Z E191C4 code_accepted Primary Code · Accepted
+    ```
+
+    The dates in these examples were in the future when they ran; pick your own when you try them.
+
+    ## 5. Keeping your key safe
+
+    - Treat the key like a password. Keep it in a secret store and out of source control, logs and URLs.
+    - If a key leaks, delete it in **Settings › API keys** at once (it stops working on the next request), or ask Yama support to revoke it.
+    - "Last used" in Settings is accurate to about 5 minutes; use it to spot keys nobody uses any more, and delete them.
+paths:
+  /api/v2/api-key/:
+    get:
+      operationId: api_key_retrieve
+      description: |-
+        Describe the API key that sends the request: its name, expiry, last use, permissions and unit access, so an integration can check what it may do. Portal sessions get 404, since they carry no key.
+
+        Available to every valid API key, whatever its permissions.
+      summary: Describe this API key
+      tags:
+      - api-key
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiKey'
+          description: ''
+        '401':
+          description: The API key is malformed, unknown, deleted or expired, or no
+            key followed `Bearer`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: No credentials were sent, or the key lacks the permission this
+            operation needs.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: 'Rate limited: retry after the `Retry-After` header''s seconds.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-api-key-permission: any
+  /api/v2/buildings/:
+    get:
+      operationId: buildings_list
+      description: |-
+        List your buildings, with each building's caller ID (the number its intercom calls from) and how many of your units it has. Use a building's `uuid` to filter units with `?building=`. Buildings are managed by Yama.
+
+        Requires an API key with Buildings: Read or any Access codes, Contacts or Call log permission (each grants reading buildings).
+      summary: List buildings
+      parameters:
+      - name: limit
+        required: false
+        in: query
+        description: How many items per page, 1 to 500.
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 500
+          default: 100
+      - name: offset
+        required: false
+        in: query
+        description: How many items to skip. Follow `next` rather than computing it.
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+      tags:
+      - buildings
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedBuildingList'
+          description: ''
+        '400':
+          description: A field or query parameter is invalid, blank or unknown.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        '401':
+          description: The API key is malformed, unknown, deleted or expired, or no
+            key followed `Bearer`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: No credentials were sent, or the key lacks the permission this
+            operation needs.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: 'Rate limited: retry after the `Retry-After` header''s seconds.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-api-key-permission: buildings:read
+  /api/v2/buildings/{uuid}/:
+    get:
+      operationId: buildings_retrieve
+      description: |-
+        Get one building by its `uuid`.
+
+        Requires an API key with Buildings: Read or any Access codes, Contacts or Call log permission (each grants reading buildings).
+      summary: Get a building
+      parameters:
+      - in: path
+        name: uuid
+        schema:
+          type: string
+          pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
+          format: uuid
+        required: true
+      tags:
+      - buildings
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Building'
+          description: ''
+        '401':
+          description: The API key is malformed, unknown, deleted or expired, or no
+            key followed `Bearer`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: No credentials were sent, or the key lacks the permission this
+            operation needs.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: No such object within the caller's reach (another account's
+            looks the same).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: 'Rate limited: retry after the `Retry-After` header''s seconds.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-api-key-permission: buildings:read
+  /api/v2/calls/:
+    get:
+      operationId: calls_list
+      description: |-
+        List intercom calls on the units you can reach, newest first, with their steps, for a range of UTC dates (the last 30 days by default). Filter with `?unit=<unit uuid>` or `?building=<building uuid>`. Pages with `limit` and `offset` like every list; follow `next` for older calls.
+
+        Requires the API key permission Call log: Read.
+      summary: List calls
+      parameters:
+      - in: query
+        name: building
+        schema:
+          type: string
+          format: uuid
+        description: Only calls through this building's intercom (its uuid), wherever
+          the unit is now.
+      - in: query
+        name: end
+        schema:
+          type: string
+          format: date
+        description: Last day to include (UTC). Send with start.
+      - name: limit
+        required: false
+        in: query
+        description: How many items per page, 1 to 500.
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 500
+          default: 100
+      - name: offset
+        required: false
+        in: query
+        description: How many items to skip. Follow `next` rather than computing it.
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+      - in: query
+        name: result
+        schema:
+          enum:
+          - code_accepted
+          - forwarded
+          - rejected
+          - error
+          - code_not_accepted
+          - hung_up
+          - in_progress
+          - not_recorded
+          type: string
+          minLength: 1
+        description: |-
+          * `code_accepted` - Code accepted
+          * `forwarded` - Forwarded
+          * `rejected` - Rejected
+          * `error` - Error
+          * `code_not_accepted` - Code not accepted
+          * `hung_up` - Hung up
+          * `in_progress` - In progress
+          * `not_recorded` - Not recorded
+      - in: query
+        name: start
+        schema:
+          type: string
+          format: date
+        description: First day to include (UTC). Send with end.
+      - in: query
+        name: unit
+        schema:
+          type: string
+          format: uuid
+        description: Only calls to this unit (its uuid).
+      tags:
+      - calls
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedCallLogEntryList'
+          description: ''
+        '400':
+          description: A field or query parameter is invalid, blank or unknown.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        '401':
+          description: The API key is malformed, unknown, deleted or expired, or no
+            key followed `Bearer`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: No credentials were sent, or the key lacks the permission this
+            operation needs.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: 'Rate limited: retry after the `Retry-After` header''s seconds.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-api-key-permission: call_log:read
+  /api/v2/calls/{uuid}/:
+    get:
+      operationId: calls_retrieve
+      description: |-
+        Get one call, with its steps, by its `uuid`, whatever its date.
+
+        Requires the API key permission Call log: Read.
+      summary: Get a call
+      parameters:
+      - in: path
+        name: uuid
+        schema:
+          type: string
+          pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
+          format: uuid
+        required: true
+      tags:
+      - calls
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CallLogEntry'
+          description: ''
+        '401':
+          description: The API key is malformed, unknown, deleted or expired, or no
+            key followed `Bearer`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: No credentials were sent, or the key lacks the permission this
+            operation needs.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: No such object within the caller's reach (another account's
+            looks the same).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: 'Rate limited: retry after the `Retry-After` header''s seconds.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-api-key-permission: call_log:read
+  /api/v2/codes/:
+    get:
+      operationId: codes_list
+      description: |-
+        List the access codes on the units you can reach. Filter by unit with `?unit=<unit uuid>`; the list is paginated with `limit` and `offset`.
+
+        Requires the API key permission Access codes: Read.
+      summary: List access codes
+      parameters:
+      - in: query
+        name: code
+        schema:
+          type: string
+        description: Only the code with exactly these digits.
+      - name: limit
+        required: false
+        in: query
+        description: How many items per page, 1 to 500.
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 500
+          default: 100
+      - in: query
+        name: name
+        schema:
+          type: string
+        description: Only codes with exactly this name; use `search` for part of a
+          name.
+      - name: offset
+        required: false
+        in: query
+        description: How many items to skip. Follow `next` rather than computing it.
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+      - name: search
+        required: false
+        in: query
+        description: Only items whose name contains this text (case-insensitive).
+        schema:
+          type: string
+      - in: query
+        name: unit
+        schema:
+          type: string
+          format: uuid
+        description: Only this unit's (its `uuid`).
+      tags:
+      - codes
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedAccessCodeList'
+          description: ''
+        '400':
+          description: A field or query parameter is invalid, blank or unknown.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        '401':
+          description: The API key is malformed, unknown, deleted or expired, or no
+            key followed `Bearer`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: No credentials were sent, or the key lacks the permission this
+            operation needs.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: 'Rate limited: retry after the `Retry-After` header''s seconds.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-api-key-permission: codes:read
+    post:
+      operationId: codes_create
+      description: |-
+        Create an access code on one of your units. `code` is 3 to 15 digits and unique on the unit. Set `expires_at` (UTC) to make the code stop working after that instant, or leave it out for a code that never expires.
+
+        Requires the API key permission Access codes: Read and write.
+      summary: Create an access code
+      tags:
+      - codes
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccessCodeRequest'
+        required: true
+      security:
+      - bearerAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccessCode'
+          description: ''
+        '400':
+          description: A field or query parameter is invalid, blank or unknown.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        '401':
+          description: The API key is malformed, unknown, deleted or expired, or no
+            key followed `Bearer`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: No credentials were sent, or the key lacks the permission this
+            operation needs.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: 'Rate limited: retry after the `Retry-After` header''s seconds.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-api-key-permission: codes:write
+  /api/v2/codes/{uuid}/:
+    get:
+      operationId: codes_retrieve
+      description: |-
+        Get one access code by its `uuid`.
+
+        Requires the API key permission Access codes: Read.
+      summary: Get an access code
+      parameters:
+      - in: path
+        name: uuid
+        schema:
+          type: string
+          pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
+          format: uuid
+        required: true
+      tags:
+      - codes
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccessCode'
+          description: ''
+        '401':
+          description: The API key is malformed, unknown, deleted or expired, or no
+            key followed `Bearer`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: No credentials were sent, or the key lacks the permission this
+            operation needs.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: No such object within the caller's reach (another account's
+            looks the same).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: 'Rate limited: retry after the `Retry-After` header''s seconds.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-api-key-permission: codes:read
+    put:
+      operationId: codes_update
+      description: |-
+        Replace an access code; `unit` and `code` are required. Leaving `expires_at` out keeps the current expiry, and `null` clears it.
+
+        Requires the API key permission Access codes: Read and write.
+      summary: Replace an access code
+      parameters:
+      - in: path
+        name: uuid
+        schema:
+          type: string
+          pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
+          format: uuid
+        required: true
+      tags:
+      - codes
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccessCodeRequest'
+        required: true
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccessCode'
+          description: ''
+        '400':
+          description: A field or query parameter is invalid, blank or unknown.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        '401':
+          description: The API key is malformed, unknown, deleted or expired, or no
+            key followed `Bearer`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: No credentials were sent, or the key lacks the permission this
+            operation needs.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: No such object within the caller's reach (another account's
+            looks the same).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: 'Rate limited: retry after the `Retry-After` header''s seconds.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-api-key-permission: codes:write
+    patch:
+      operationId: codes_partial_update
+      description: |-
+        Change some fields of an access code. Send `expires_at` to set a new UTC expiry or `null` to clear it; fields you leave out are unchanged.
+
+        Requires the API key permission Access codes: Read and write.
+      summary: Update an access code
+      parameters:
+      - in: path
+        name: uuid
+        schema:
+          type: string
+          pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
+          format: uuid
+        required: true
+      tags:
+      - codes
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedAccessCodeRequest'
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccessCode'
+          description: ''
+        '400':
+          description: A field or query parameter is invalid, blank or unknown.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        '401':
+          description: The API key is malformed, unknown, deleted or expired, or no
+            key followed `Bearer`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: No credentials were sent, or the key lacks the permission this
+            operation needs.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: No such object within the caller's reach (another account's
+            looks the same).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: 'Rate limited: retry after the `Retry-After` header''s seconds.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-api-key-permission: codes:write
+    delete:
+      operationId: codes_destroy
+      description: |-
+        Delete an access code. It stops opening the door immediately.
+
+        Requires the API key permission Access codes: Read and write.
+      summary: Delete an access code
+      parameters:
+      - in: path
+        name: uuid
+        schema:
+          type: string
+          pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
+          format: uuid
+        required: true
+      tags:
+      - codes
+      security:
+      - bearerAuth: []
+      responses:
+        '204':
+          description: No response body
+        '401':
+          description: The API key is malformed, unknown, deleted or expired, or no
+            key followed `Bearer`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: No credentials were sent, or the key lacks the permission this
+            operation needs.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: No such object within the caller's reach (another account's
+            looks the same).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: 'Rate limited: retry after the `Retry-After` header''s seconds.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-api-key-permission: codes:write
+  /api/v2/contacts/:
+    get:
+      operationId: contacts_list
+      description: |-
+        List the contacts a visitor can be forwarded to from the intercom menu, on the units you can reach. Filter by unit with `?unit=<unit uuid>`. Contacts are managed in the portal.
+
+        Requires the API key permission Contacts: Read.
+      summary: List contacts
+      parameters:
+      - name: limit
+        required: false
+        in: query
+        description: How many items per page, 1 to 500.
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 500
+          default: 100
+      - in: query
+        name: menu_digit
+        schema:
+          type: string
+        description: Only the contact a visitor reaches by pressing this digit in
+          the unit's menu.
+      - in: query
+        name: number
+        schema:
+          type: string
+        description: Only contacts with exactly this phone number (E.164, e.g. `+16045550123`).
+      - name: offset
+        required: false
+        in: query
+        description: How many items to skip. Follow `next` rather than computing it.
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+      - in: query
+        name: unit
+        schema:
+          type: string
+          format: uuid
+        description: Only this unit's (its `uuid`).
+      tags:
+      - contacts
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedContactList'
+          description: ''
+        '400':
+          description: A field or query parameter is invalid, blank or unknown.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        '401':
+          description: The API key is malformed, unknown, deleted or expired, or no
+            key followed `Bearer`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: No credentials were sent, or the key lacks the permission this
+            operation needs.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: 'Rate limited: retry after the `Retry-After` header''s seconds.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-api-key-permission: contacts:read
+  /api/v2/contacts/{uuid}/:
+    get:
+      operationId: contacts_retrieve
+      description: |-
+        Get one contact by its `uuid`.
+
+        Requires the API key permission Contacts: Read.
+      summary: Get a contact
+      parameters:
+      - in: path
+        name: uuid
+        schema:
+          type: string
+          pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
+          format: uuid
+        required: true
+      tags:
+      - contacts
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Contact'
+          description: ''
+        '401':
+          description: The API key is malformed, unknown, deleted or expired, or no
+            key followed `Bearer`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: No credentials were sent, or the key lacks the permission this
+            operation needs.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: No such object within the caller's reach (another account's
+            looks the same).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: 'Rate limited: retry after the `Retry-After` header''s seconds.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-api-key-permission: contacts:read
+  /api/v2/units/:
+    get:
+      operationId: units_list
+      description: |-
+        List your units. A unit's `uuid` is what you use to filter codes, contacts and calls. Filter units by building with `?building=<building uuid>`. Units are managed in the portal.
+
+        Requires an API key with any Access codes, Contacts or Call log permission (each grants reading units).
+      summary: List units
+      parameters:
+      - in: query
+        name: building
+        schema:
+          type: string
+          format: uuid
+        description: Only units in this building (its `uuid`).
+      - in: query
+        name: door_digit
+        schema:
+          type: string
+          enum:
+          - '0'
+          - '1'
+          - '2'
+          - '3'
+          - '4'
+          - '5'
+          - '6'
+          - '7'
+          - '8'
+          - '9'
+        description: |-
+          Only units with this door digit.
+
+          * `0` - 0
+          * `1` - 1
+          * `2` - 2
+          * `3` - 3
+          * `4` - 4
+          * `5` - 5
+          * `6` - 6
+          * `7` - 7
+          * `8` - 8
+          * `9` - 9
+      - name: limit
+        required: false
+        in: query
+        description: How many items per page, 1 to 500.
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 500
+          default: 100
+      - name: offset
+        required: false
+        in: query
+        description: How many items to skip. Follow `next` rather than computing it.
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+      - name: search
+        required: false
+        in: query
+        description: Only items whose name contains this text (case-insensitive).
+        schema:
+          type: string
+      tags:
+      - units
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedUnitList'
+          description: ''
+        '400':
+          description: A field or query parameter is invalid, blank or unknown.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        '401':
+          description: The API key is malformed, unknown, deleted or expired, or no
+            key followed `Bearer`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: No credentials were sent, or the key lacks the permission this
+            operation needs.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: 'Rate limited: retry after the `Retry-After` header''s seconds.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-api-key-permission: units:read
+  /api/v2/units/{uuid}/:
+    get:
+      operationId: units_retrieve
+      description: |-
+        Get one unit by its `uuid`.
+
+        Requires an API key with any Access codes, Contacts or Call log permission (each grants reading units).
+      summary: Get a unit
+      parameters:
+      - in: path
+        name: uuid
+        schema:
+          type: string
+          pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
+          format: uuid
+        required: true
+      tags:
+      - units
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Unit'
+          description: ''
+        '401':
+          description: The API key is malformed, unknown, deleted or expired, or no
+            key followed `Bearer`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: No credentials were sent, or the key lacks the permission this
+            operation needs.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: No such object within the caller's reach (another account's
+            looks the same).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: 'Rate limited: retry after the `Retry-After` header''s seconds.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-api-key-permission: units:read
+components:
+  schemas:
+    AccessCode:
+      type: object
+      description: |-
+        For serializers: a request body field that is read-only (such as `uuid`) or that the serializer doesn't have is a
+        400 naming it, never silently dropped, so a caller who thinks it set a field finds out (TASK-237.13).
+      properties:
+        uuid:
+          type: string
+          format: uuid
+          readOnly: true
+        unit:
+          type: string
+          format: uuid
+          description: The unit's `uuid`.
+        code:
+          type: string
+          maxLength: 15
+        name:
+          type: string
+          nullable: true
+          maxLength: 255
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - code
+      - unit
+      - uuid
+    AccessCodeRequest:
+      type: object
+      description: |-
+        For serializers: a request body field that is read-only (such as `uuid`) or that the serializer doesn't have is a
+        400 naming it, never silently dropped, so a caller who thinks it set a field finds out (TASK-237.13).
+      properties:
+        unit:
+          type: string
+          format: uuid
+          description: The unit's `uuid`.
+        code:
+          type: string
+          minLength: 1
+          maxLength: 15
+        name:
+          type: string
+          nullable: true
+          maxLength: 255
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - code
+      - unit
+    ApiKey:
+      type: object
+      properties:
+        uuid:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        expires_at:
+          type: string
+          format: date-time
+          readOnly: true
+        last_used_at:
+          type: string
+          format: date-time
+          readOnly: true
+        permissions:
+          allOf:
+          - $ref: '#/components/schemas/ApiKeyPermissions'
+          readOnly: true
+        scopes:
+          type: array
+          items:
+            type: string
+          readOnly: true
+        unit_access:
+          allOf:
+          - $ref: '#/components/schemas/ApiKeyUnitAccess'
+          readOnly: true
+      required:
+      - created_at
+      - expires_at
+      - last_used_at
+      - name
+      - permissions
+      - scopes
+      - unit_access
+      - uuid
+    ApiKeyPermissions:
+      type: object
+      description: One field per permission row, so a new `PERMISSIONS` entry appears
+        here without a change.
+      properties:
+        codes:
+          allOf:
+          - $ref: '#/components/schemas/ApiKeyWriteLevelEnum'
+          readOnly: true
+        contacts:
+          allOf:
+          - $ref: '#/components/schemas/ApiKeyReadLevelEnum'
+          readOnly: true
+        call_log:
+          allOf:
+          - $ref: '#/components/schemas/ApiKeyReadLevelEnum'
+          readOnly: true
+        buildings:
+          allOf:
+          - $ref: '#/components/schemas/ApiKeyReadLevelEnum'
+          readOnly: true
+      required:
+      - buildings
+      - call_log
+      - codes
+      - contacts
+    ApiKeyReadLevelEnum:
+      enum:
+      - none
+      - read
+      type: string
+      description: |-
+        * `none` - none
+        * `read` - read
+    ApiKeyUnitAccess:
+      type: object
+      properties:
+        type:
+          allOf:
+          - $ref: '#/components/schemas/ApiKeyUnitAccessTypeEnum'
+          readOnly: true
+        buildings:
+          type: array
+          items:
+            type: string
+            format: uuid
+          readOnly: true
+        units:
+          type: array
+          items:
+            type: string
+            format: uuid
+          readOnly: true
+      required:
+      - buildings
+      - type
+      - units
+    ApiKeyUnitAccessTypeEnum:
+      enum:
+      - all
+      - buildings
+      - units
+      type: string
+      description: |-
+        * `all` - all
+        * `buildings` - buildings
+        * `units` - units
+    ApiKeyWriteLevelEnum:
+      enum:
+      - none
+      - read
+      - write
+      type: string
+      description: |-
+        * `none` - none
+        * `read` - read
+        * `write` - write
+    Building:
+      type: object
+      properties:
+        uuid:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          readOnly: true
+        address:
+          type: string
+          readOnly: true
+        caller_id:
+          type: string
+          readOnly: true
+          description: The number the building's intercom calls from, in E.164.
+        unit_count:
+          type: integer
+          readOnly: true
+          description: How many of the units you can reach are in this building.
+      required:
+      - address
+      - caller_id
+      - name
+      - unit_count
+      - uuid
+    CallLogEntry:
+      type: object
+      properties:
+        uuid:
+          type: string
+          format: uuid
+          readOnly: true
+        unit:
+          type: string
+          format: uuid
+          readOnly: true
+          description: The unit that was called.
+        building:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+          description: The building whose intercom placed the call, as it was at call
+            time; null for a unit outside any building.
+        reference:
+          type: string
+          description: A short reference for the call (the end of its Twilio call
+            SID); quote it to Yama support.
+        started_at:
+          type: string
+          format: date-time
+        duration_seconds:
+          type: integer
+          nullable: true
+        result:
+          $ref: '#/components/schemas/CallResultEnum'
+        result_label:
+          type: string
+        summary:
+          type: string
+        imported:
+          type: boolean
+        steps:
+          type: array
+          items:
+            $ref: '#/components/schemas/CallLogStep'
+      required:
+      - building
+      - duration_seconds
+      - imported
+      - reference
+      - result
+      - result_label
+      - started_at
+      - steps
+      - summary
+      - unit
+      - uuid
+    CallLogStep:
+      type: object
+      properties:
+        kind:
+          $ref: '#/components/schemas/CallStepKindEnum'
+        at:
+          type: string
+          format: date-time
+        text:
+          type: string
+        attempt_result:
+          nullable: true
+          description: |-
+            For an `input` step: how the entered code was judged.
+
+            * `accepted` - Accepted
+            * `not_accepted` - Not accepted
+            * `expired` - Expired code
+            * `retired` - Retired code
+            * `refused` - Refused
+          oneOf:
+          - $ref: '#/components/schemas/CodeAttemptResultEnum'
+          - $ref: '#/components/schemas/NullEnum'
+        entered_digits:
+          type: string
+          nullable: true
+        code_name:
+          type: string
+          nullable: true
+        contact_name:
+          type: string
+          nullable: true
+        dial_status:
+          nullable: true
+          description: |-
+            For a `dial_ended` step: how the forwarded call ended.
+
+            * `completed` - Answered
+            * `answered` - Answered
+            * `no-answer` - No answer
+            * `busy` - Busy
+            * `failed` - Failed
+            * `canceled` - Cancelled
+          oneOf:
+          - $ref: '#/components/schemas/DialStatusEnum'
+          - $ref: '#/components/schemas/NullEnum'
+      required:
+      - at
+      - attempt_result
+      - code_name
+      - contact_name
+      - dial_status
+      - entered_digits
+      - kind
+      - text
+    CallResultEnum:
+      enum:
+      - code_accepted
+      - forwarded
+      - rejected
+      - error
+      - code_not_accepted
+      - hung_up
+      - in_progress
+      - not_recorded
+      type: string
+      description: |-
+        * `code_accepted` - Code accepted
+        * `forwarded` - Forwarded
+        * `rejected` - Rejected
+        * `error` - Error
+        * `code_not_accepted` - Code not accepted
+        * `hung_up` - Hung up
+        * `in_progress` - In progress
+        * `not_recorded` - Not recorded
+    CallStepKindEnum:
+      enum:
+      - received
+      - rejected
+      - prompted
+      - input
+      - tone_sent
+      - dial_started
+      - dial_ended
+      - time_limit
+      - error
+      - completed
+      type: string
+      description: |-
+        * `received` - Received
+        * `rejected` - Rejected
+        * `prompted` - Prompted
+        * `input` - Input
+        * `tone_sent` - Door tone sent
+        * `dial_started` - Dial started
+        * `dial_ended` - Dial ended
+        * `time_limit` - Time limit
+        * `error` - Error
+        * `completed` - Completed
+    CodeAttemptResultEnum:
+      enum:
+      - accepted
+      - not_accepted
+      - expired
+      - retired
+      - refused
+      type: string
+      description: |-
+        * `accepted` - Accepted
+        * `not_accepted` - Not accepted
+        * `expired` - Expired code
+        * `retired` - Retired code
+        * `refused` - Refused
+    Contact:
+      type: object
+      properties:
+        uuid:
+          type: string
+          format: uuid
+          readOnly: true
+        unit:
+          type: string
+          format: uuid
+          readOnly: true
+          description: The unit's `uuid`.
+        number:
+          type: string
+          readOnly: true
+        menu_digit:
+          type: string
+          readOnly: true
+        name:
+          type: string
+          readOnly: true
+      required:
+      - menu_digit
+      - name
+      - number
+      - unit
+      - uuid
+    DialStatusEnum:
+      enum:
+      - completed
+      - answered
+      - no-answer
+      - busy
+      - failed
+      - canceled
+      type: string
+      description: |-
+        * `completed` - Answered
+        * `answered` - Answered
+        * `no-answer` - No answer
+        * `busy` - Busy
+        * `failed` - Failed
+        * `canceled` - Cancelled
+    DoorDigitEnum:
+      enum:
+      - '0'
+      - '1'
+      - '2'
+      - '3'
+      - '4'
+      - '5'
+      - '6'
+      - '7'
+      - '8'
+      - '9'
+      type: string
+      description: |-
+        * `0` - 0
+        * `1` - 1
+        * `2` - 2
+        * `3` - 3
+        * `4` - 4
+        * `5` - 5
+        * `6` - 6
+        * `7` - 7
+        * `8` - 8
+        * `9` - 9
+    Error:
+      type: object
+      properties:
+        detail:
+          type: string
+      required:
+      - detail
+      description: A request-level error.
+    NullEnum:
+      enum:
+      - null
+    PaginatedAccessCodeList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 250
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: https://app.getyama.ca/api/v2/codes/?limit=100&offset=200
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: https://app.getyama.ca/api/v2/codes/?limit=100
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/AccessCode'
+    PaginatedBuildingList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 250
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: https://app.getyama.ca/api/v2/buildings/?limit=100&offset=200
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: https://app.getyama.ca/api/v2/buildings/?limit=100
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Building'
+    PaginatedCallLogEntryList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 250
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: https://app.getyama.ca/api/v2/calls/?limit=100&offset=200
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: https://app.getyama.ca/api/v2/calls/?limit=100
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/CallLogEntry'
+    PaginatedContactList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 250
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: https://app.getyama.ca/api/v2/contacts/?limit=100&offset=200
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: https://app.getyama.ca/api/v2/contacts/?limit=100
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Contact'
+    PaginatedUnitList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 250
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: https://app.getyama.ca/api/v2/units/?limit=100&offset=200
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: https://app.getyama.ca/api/v2/units/?limit=100
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Unit'
+    PatchedAccessCodeRequest:
+      type: object
+      description: |-
+        For serializers: a request body field that is read-only (such as `uuid`) or that the serializer doesn't have is a
+        400 naming it, never silently dropped, so a caller who thinks it set a field finds out (TASK-237.13).
+      properties:
+        unit:
+          type: string
+          format: uuid
+          description: The unit's `uuid`.
+        code:
+          type: string
+          minLength: 1
+          maxLength: 15
+        name:
+          type: string
+          nullable: true
+          maxLength: 255
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+    Unit:
+      type: object
+      properties:
+        uuid:
+          type: string
+          format: uuid
+          readOnly: true
+        building:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+          description: The `uuid` of the unit's building, or null for a unit outside
+            any building.
+        name:
+          type: string
+          readOnly: true
+        door_digit:
+          allOf:
+          - $ref: '#/components/schemas/DoorDigitEnum'
+          readOnly: true
+          description: |-
+            The digit Yama sends to the building's intercom to open the door for this unit.
+
+            * `0` - 0
+            * `1` - 1
+            * `2` - 2
+            * `3` - 3
+            * `4` - 4
+            * `5` - 5
+            * `6` - 6
+            * `7` - 7
+            * `8` - 8
+            * `9` - 9
+        dial_in_number:
+          type: string
+          readOnly: true
+          nullable: true
+          description: The Yama number the building's intercom dials for this unit,
+            or null if it has none yet.
+      required:
+      - building
+      - dial_in_number
+      - door_digit
+      - name
+      - uuid
+    ValidationError:
+      type: object
+      additionalProperties:
+        type: array
+        items:
+          type: string
+      description: Each invalid field or query parameter, mapped to its messages.
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: API key
+servers:
+- url: https://app.getyama.ca
+tags:
+- name: codes
+  x-displayName: Access codes
+  description: The codes visitors enter at a building's intercom to reach a unit.
+    List a unit's codes, create and edit them, set, change or clear when they expire,
+    and delete them.
+- name: calls
+  x-displayName: Call log
+  description: Intercom calls to your units, newest first, with each step of the call.
+    Filter by unit, building, UTC date range or result.
+- name: buildings
+  x-displayName: Buildings
+  description: Your buildings, with the number each building's intercom calls from
+    and how many of your units it has. Use a building's `uuid` to filter units and
+    calls.
+- name: units
+  x-displayName: Units
+  description: 'Your units. A unit''s `uuid` is what you use to filter codes, contacts
+    and calls. Read-only: rename units and change their door digits in the portal.'
+- name: contacts
+  x-displayName: Contacts
+  description: 'The people a visitor can be forwarded to from a unit''s intercom menu.
+    Read-only: manage contacts in the portal.'
+- name: api-key
+  x-displayName: Your API key
+  description: 'What the key making the request can do: its permissions, unit access
+    and expiry. Any valid key can read its own record.'
