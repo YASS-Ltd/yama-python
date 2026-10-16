@@ -169,7 +169,7 @@ class Codes(_Resource):
         render the form and carry it in a hidden field, which also makes a double submit safe.
         The API remembers a key for 24 hours. It remembers a 400 too and replays it for that
         key, so send corrected data with a new key: when you show the form again after a 400,
-        replace the hidden key with a new one (a bound Django form re-renders the posted value),
+        replace the hidden key with a new one,
         or the corrected submit raises `UnprocessableEntityError`.
 
         When the create fails, the error's `idempotency_key` is the key that was sent, even one

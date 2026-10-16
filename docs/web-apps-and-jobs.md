@@ -100,43 +100,4 @@ If you let the client generate the key instead, read it from the error inside th
 
 ## Creates from web forms
 
-A form can be submitted twice, by a double click or a retried request. Generate a key when you render the form and carry it in a hidden field, so a second submit of the same form returns the same code. When the API answers 400, show the form again with a new key, since the corrected submit is different data. In Django, a bound form re-renders the posted value, so replace it:
-
-<!-- not run -->
-
-```python
-import uuid
-
-from django import forms
-from django.shortcuts import redirect, render
-
-from myapp.clients import yama_client
-from yama import AccessCodeCreate, BadRequestError
-
-
-class CodeForm(forms.Form):
-    code = forms.CharField()
-    name = forms.CharField(required=False)
-    idempotency_key = forms.CharField(widget=forms.HiddenInput)
-
-
-def new_code(request, unit):
-    if request.method != "POST":
-        form = CodeForm(initial={"idempotency_key": str(uuid.uuid4())})
-        return render(request, "new_code.html", {"form": form})
-    form = CodeForm(request.POST)
-    if form.is_valid():
-        data = AccessCodeCreate(
-            unit=unit, code=form.cleaned_data["code"], name=form.cleaned_data["name"] or None
-        )
-        key = form.cleaned_data["idempotency_key"]
-        try:
-            yama_client().with_options(timeout=5.0).codes.create(data, idempotency_key=key)
-            return redirect("codes")
-        except BadRequestError as error:
-            for field, messages in error.errors.items():
-                form.add_error(field if field in form.fields else None, messages)
-            form.data = form.data.copy()
-            form.data["idempotency_key"] = str(uuid.uuid4())  # corrected data, new key
-    return render(request, "new_code.html", {"form": form})
-```
+A form can be submitted twice, by a double click or a retried request. Generate a key when you render the form and carry it in a hidden field, so a second submit of the same form returns the same code. When the API answers 400, show the form again with a new key, since the corrected submit is different data.
