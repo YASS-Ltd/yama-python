@@ -85,7 +85,7 @@ Written in [EARS](https://alistairmavin.com/ears/) form: each is one testable se
 ### Call log (CALL)
 
 - **CALL-1** While iterating the call log, the client shall skip any call whose `uuid` it has already yielded in that iteration.
-- **CALL-2** If the caller passes only one of `start` and `end`, then the client shall raise `ValueError` without sending a request.
+- **CALL-2** When the caller omits `start` or `end`, the client shall treat that side of the range as open, sending the earliest date the API accepts for a missing `start` and today's UTC date for a missing `end`, so a call with neither covers all history.
 - **CALL-3** The client shall send `start` and `end` as ISO 8601 dates.
 
 ### Access codes (CODE)

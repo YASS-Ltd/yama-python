@@ -74,7 +74,7 @@ Paths are relative to `/api/v2/`. `uuid` parameters accept `UUID | str`. Filters
 | `codes.replace(uuid, data: AccessCodeCreate)` | `PUT codes/{uuid}/` | `AccessCode` |
 | `codes.update(uuid, data: AccessCodeUpdate)` | `PATCH codes/{uuid}/` | `AccessCode` |
 | `codes.delete(uuid)` | `DELETE codes/{uuid}/` | `None` |
-| `calls.list(*, start: date, end: date, unit, building, result)` | `GET calls/` | `Paginator[CallLogEntry]` |
+| `calls.list(*, start: date \| None, end: date \| None, unit, building, result)` | `GET calls/` | `Paginator[CallLogEntry]` |
 | `calls.get(uuid)` | `GET calls/{uuid}/` | `CallLogEntry` |
 
 Lists take no `limit` or `offset`: the paginator requests pages itself and follows `next` (PAG-1).
@@ -113,4 +113,4 @@ An error's message is `"<status> <detail>"`.
 
 ## Implementation Defaults
 
-Choices that aren't requirements, recorded so they're consistent: every list requests the API's maximum page size (`limit=500`), for the fewest requests under the rate limit. Backoff starts at 0.5 s, doubles, is capped at 8 s, with full jitter. Async isn't in v0.1; keeping request building separate from sending should make an `AsyncYama` a small addition later.
+Choices that aren't requirements, recorded so they're consistent: every list requests the API's maximum page size (`limit=500`), for the fewest requests under the rate limit. An open `start` is sent as `2000-01-01` (CALL-2); the live tests confirm the API accepts it. Backoff starts at 0.5 s, doubles, is capped at 8 s, with full jitter. Async isn't in v0.1; keeping request building separate from sending should make an `AsyncYama` a small addition later.
