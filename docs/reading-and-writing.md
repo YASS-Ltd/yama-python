@@ -108,7 +108,12 @@ code = client.codes.update(code.uuid, AccessCodeUpdate(name="Cleaner (Mon-Fri)")
 code = client.codes.update(code.uuid, AccessCodeUpdate(expires_at=None))  # never expires
 ```
 
-`codes.replace()` takes a whole `AccessCodeCreate`; leaving `expires_at` unset keeps the current expiry.
+`codes.replace()` takes a whole `AccessCodeCreate`; leaving `expires_at` unset keeps the current expiry. To start from a code you fetched, copy only the fields the request model has, so this keeps working when the API adds fields to its responses:
+
+```python
+fields = code.model_dump(include=set(AccessCodeCreate.model_fields))
+code = client.codes.replace(code.uuid, AccessCodeCreate(**(fields | {"code": "8642"})))
+```
 
 ## Deleting
 
