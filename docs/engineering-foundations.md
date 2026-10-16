@@ -47,9 +47,11 @@ The `justfile` is the single entry point for repeated commands: `just test`, `ju
 ## Testing Strategy
 
 - **Tests first:** write a failing test, then the minimum code to pass, then refactor.
-- **Unit tests** mock HTTP with respx. They cover each operation's request (method, path, query, body), response parsing, pagination edge cases (empty list, one page, many pages, a `next` that repeats a call), the error mapping for each status, and retry behaviour, using a fake clock so tests don't sleep.
+- **Unit tests** mock single HTTP exchanges with respx. They cover each operation's request (method, path, query, body), response parsing, pagination edge cases (empty list, one page, many pages, a `next` that repeats a call), the error mapping for each status, and retry behaviour, using a fake clock so tests don't sleep.
 - **Contract tests** check the client against the vendored schema: every operation in the schema has a client method, and every request the client builds validates against the schema.
-- **No production calls** in tests or CI. An optional live-test suite runs against a non-production Yama instance with a dedicated key, outside CI, and is skipped when the environment variables are absent.
+- **An in-memory fake API** built on `httpx.MockTransport`, with no server or process. It holds a few made-up buildings, units, contacts, codes and calls in dicts and implements the real behaviours: `limit`/`offset` with `next` links, code create, update and delete, a 400 naming an unknown field, a 404, and a 429 with `Retry-After` on demand. Every response it returns is validated against the vendored schema, so the fake can't drift from the contract unnoticed. One scenario test drives the client through every operation an integrator uses, end to end, in milliseconds.
+- **Live tests** (`just test-live <base-url>`) run the same scenario against a real Yama API, normally a local django-poc checkout with seed data, and are skipped when no base URL and key are given. They never run in CI. They're a step in every release, as the last check that the client works against the real server. The client talks to it only over HTTP, as an integrator would; nothing from django-poc is copied here.
+- **No production calls** in tests, CI or live tests.
 - **Fixtures** use made-up data shaped like the integrator guide's examples. Never commit real API responses: they hold customer phone numbers and names.
 - **Coverage** is there to find untested code (`just cov`), not a gate. There is no floor.
 
