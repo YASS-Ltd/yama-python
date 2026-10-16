@@ -62,6 +62,12 @@ Written in [EARS](https://alistairmavin.com/ears/) form: each is one testable se
 
 - **SEC-1** The client shall keep the API key out of every `repr`, exception message, log record and URL.
 
+### Logging (LOG)
+
+- **LOG-1** The client shall log one DEBUG record to the `yama` logger per HTTP attempt, with its method, path, status, elapsed time and attempt number in the message and as `yama_`-prefixed `extra` fields.
+- **LOG-2** When the client retries a request, it shall log one INFO record with the reason, the wait and the attempt number, in the same two forms.
+- **LOG-3** The client shall keep API keys, headers, request and response bodies and query strings out of every log record, and shall log nothing at WARNING or above.
+
 ### Retries (RTY)
 
 - **RTY-1** When a request gets a 429, a 5xx or a network error, the client shall retry it, up to `max_retries` times (default 2).
@@ -112,7 +118,7 @@ Written in [EARS](https://alistairmavin.com/ears/) form: each is one testable se
 ### Delivery (DEL)
 
 - **DEL-1** The package shall be published to PyPI as `yama` through trusted publishing.
-- **DEL-2** The documentation site shall cover install, configuration, pagination, errors, retries and versioning, with a reference generated from docstrings.
+- **DEL-2** The documentation site shall cover install, configuration, pagination, errors, retries, logging and versioning, with a reference generated from docstrings.
 - **DEL-3** The README quick start shall run as written against the in-memory fake API.
 
 ## Settled Choices

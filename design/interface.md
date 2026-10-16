@@ -52,6 +52,7 @@ Yama(
 - `DEFAULT_BASE_URL` is the only place in the code that names Yama's domain (CFG-3).
 - `Yama` is a context manager and has `close()`.
 - Resource attributes: `api_key`, `buildings`, `units`, `contacts`, `codes`, `calls`. The key string is private (`_key`).
+- Logs go to `logging.getLogger("yama")`; `yama/__init__.py` adds a `NullHandler` to it (LOG-1 to LOG-3).
 - Waits between retries go through `Yama._sleep` (default `time.sleep`), so tests replace it instead of sleeping.
 
 ## Resources

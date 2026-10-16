@@ -24,7 +24,7 @@ Lightweight code and lightweight process. Few dependencies, little code, and as 
 
 Zensical is the successor to Material for MkDocs, from the same team; Material went into maintenance mode in November 2025. The site is branded with Yama's colours, Dark Forest `#21212B` and Clay Rose `#E3C8BD`, and the logo and icon in `.github/assets/` (the logo has a Dark Forest variant for light backgrounds and a Clay Rose one for dark). Zensical is young; if it falls short, Material for MkDocs reads the same configuration.
 
-The site stays small: a home page (install and quick start, shared with the README), one guide (configuration, pagination, errors, retries and idempotency, versioning), a reference generated from docstrings, and the changelog. It documents the Python client only. The REST API's own docs stay in Scalar at `/api/v2/docs/`, and the site links to them rather than repeating them. The README stays the front door: short, with the quick start and a link to the site.
+The site stays small: a home page (install and quick start, shared with the README), one guide (configuration, pagination, errors, retries and idempotency, logging, versioning), a reference generated from docstrings, and the changelog. It documents the Python client only. The REST API's own docs stay in Scalar at `/api/v2/docs/`, and the site links to them rather than repeating them. The README stays the front door: short, with the quick start and a link to the site.
 
 httpx is chosen over requests because it offers sync and async clients with one interface, so async can be added later without a rewrite. It also has timeouts on by default and is well typed.
 
@@ -65,6 +65,11 @@ The rules for what the client exposes and what it hides. They follow the convent
 11. **No surprises.** Importing `yama` does nothing but define things: no network, no logging configuration, no printing, no warnings. There is no global client and no hidden state. Configuration comes from arguments, with only `YAMA_API_KEY` and `YAMA_API_BASE_URL` as environment fallbacks. A `Yama` instance is safe to share between threads.
 12. **Keys stay secret.** The key appears in no `repr`, log line, exception message or URL.
 13. **Identify the client.** Requests send `User-Agent: yama-python/<version> python/<version>`, so the server's logs show which client versions are in use.
+14. **Quiet, standard logging.** The client logs through `logging.getLogger("yama")` only, adds a `NullHandler`, and never adds handlers, sets levels or picks a format; the application decides all of that. This is what lets structlog, loguru, python-json-logger, OpenTelemetry and Sentry all pick up its records.
+    - DEBUG: one record per HTTP attempt (method, path, status, elapsed time, attempt). INFO: one per retry (reason, wait, attempt). Nothing at WARNING or above: a problem raises instead, and deprecations use `warnings`.
+    - Each fact goes both in the message text and in `extra` fields prefixed `yama_` (`yama_method`, `yama_path`, `yama_status`, `yama_attempt`, …), so pipelines that keep only the message still read well and structured ones get fields. The prefix avoids clashes with `LogRecord` attributes and other libraries.
+    - Never logged: the key, headers, request or response bodies (they hold access-code digits, phone numbers and names), and query strings (filters such as `code=` and `number=`). Paths only.
+    - httpx logs every request at INFO under its own `httpx` logger, full URL included. The docs tell integrators to raise that logger to WARNING if their logs leave the machine; the client doesn't change it for them.
 
 ### The schema is the contract
 
