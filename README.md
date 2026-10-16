@@ -33,7 +33,10 @@ Manage a building's access codes and read its call log from Python. The client h
 uv add yama        # or: pip install yama
 ```
 
+<!-- --8<-- [start:quick-start] -->
 ## Quick start
+
+Create an API key in the Yama portal under **Settings › API keys**, with read access to access codes and the call log, and set it as `YAMA_API_KEY`. Keep it out of source control.
 
 ```python
 from datetime import datetime, timezone
@@ -50,21 +53,20 @@ end = datetime(2026, 11, 1, tzinfo=timezone.utc)  # exclusive: all of October
 for call in client.calls.list(start=start, end=end):
     print(call.started_at, call.result)
 ```
-
-Create a key in the Yama portal under **Settings › API keys**. Keep it in an environment variable or a secret manager, never in source control.
+<!-- --8<-- [end:quick-start] -->
 
 ## What you get
 
 - **Typed:** Pydantic models with UTC-aware datetimes, so your editor autocompletes.
-- **Every page:** iterating a list follows `next` to the end, and the call log is de-duplicated.
-- **Safe retries:** on 429 (honouring `Retry-After`) and failures to connect for every call, and on 5xx and other network errors for every call that's safe to repeat: reads, replaces, updates, deletes, and creates, which carry an `Idempotency-Key` so a code is never created twice.
-- **Clear errors:** one exception class per kind of failure, listed in the [docs](https://yass-ltd.github.io/yama-python/).
+- **Every item:** iterating a list yields every item, and each call in the call log comes once.
+- **Safe retries:** on 429 (honouring `Retry-After`), 5xx and network errors, for every call, creates included: a code is never created twice.
+- **Clear errors:** one exception class per kind of failure, listed in the [docs](https://yass-ltd.github.io/yama-python/errors/).
 - **Forward-compatible:** new fields and enum values from the API don't break your code.
 - **Small:** two dependencies, httpx and Pydantic. Python 3.10 and newer.
 
 ## Versioning
 
-SemVer, targeting version 2 of the Yama API (`/api/v2/`). See the [changelog](CHANGELOG.md).
+SemVer, targeting version 2 of the Yama API (`/api/v2/`). Release notes are on [GitHub Releases](https://github.com/YASS-Ltd/yama-python/releases).
 
 ## Contributing
 

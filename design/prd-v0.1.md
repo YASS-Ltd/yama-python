@@ -42,7 +42,7 @@ Written in [EARS](https://alistairmavin.com/ears/) form: each is one testable se
 - **CFG-2** If the caller passes `api_key` as `None` or an empty string, or omits it while `YAMA_API_KEY` is unset or empty, then the client shall raise `YamaError` when constructed, without sending a request.
 - **CFG-3** The client shall send requests to the `base_url` argument, or else `YAMA_API_BASE_URL`, or else `https://app.yamasystems.com`.
 - **CFG-4** The client shall apply `timeout` as httpx does: a number of seconds (default 30) limits each phase of a request attempt (connecting, writing, reading, waiting for a pooled connection), and an `httpx.Timeout` sets the phases individually. `None` is rejected with `TypeError`; `httpx.Timeout(None)` turns timeouts off.
-- **CFG-5** Where the caller provides an `httpx.Client`, the client shall send every request through it with its own base URL, timeout and headers applied per request, and shall leave closing it to the caller.
+- **CFG-5** Where the caller provides an `httpx.Client`, the client shall send every request through it with its own base URL, timeout and headers applied per request, and shall leave closing it to the caller. If it is not an `httpx.Client`, such as an `httpx.AsyncClient`, then the client shall raise `TypeError` when constructed.
 - **CFG-6** When the caller calls `with_options()` with a `timeout` or `max_retries`, the client shall return a copy that uses them and shares the original's connections, API key and base URL, leaving the original unchanged and open when the copy is closed.
 
 ### Requests (HTTP)
@@ -109,7 +109,7 @@ Written in [EARS](https://alistairmavin.com/ears/) form: each is one testable se
 - **MOD-1** The client shall return responses as Pydantic models, with UUIDs as `UUID` and datetimes timezone-aware.
 - **MOD-2** When a response contains a field the client doesn't define, the client shall keep it readable on the model.
 - **MOD-3** When a response contains an enum value the client doesn't know, the client shall return it as a plain string.
-- **MOD-4** If a request model is given a field it doesn't define, or a datetime without a timezone, then building the model shall raise `pydantic.ValidationError`.
+- **MOD-4** If a request model is given a field it doesn't define, a datetime without a timezone, or null for a field the schema doesn't allow null, then building the model shall raise `pydantic.ValidationError`.
 - **MOD-5** The client shall check only types and required fields in request models, leaving value rules such as lengths to the API.
 - **MOD-6** The client's enum members shall give their value from `str()` and in f-strings, as the plain strings of MOD-3 do.
 

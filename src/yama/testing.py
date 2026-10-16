@@ -1,18 +1,19 @@
-"""An in-memory Yama API, for testing code that uses the client without a network or a key.
+"""An in-memory Yama API, for testing code that uses the client without a network or an API key.
 
     import httpx
     from yama import Yama
     from yama.testing import fake_transport
 
-    client = Yama(api_key="test", http_client=httpx.Client(transport=fake_transport()))
+    http = httpx.Client(transport=fake_transport())
+    client = Yama(api_key="test", http_client=http, max_retries=0)
 
 The fake holds a few made-up buildings, units, contacts, access codes and calls, and behaves
-like the real API: lists page with `limit`, `offset` and `next`, and take the same filters;
-access codes can be created, replaced, updated and deleted; bad input, such as an expiry in
-the past (other than a code's current one, sent back), gets the same 400s, and
-a missing object a 404. A create repeating an `Idempotency-Key` replays the first answer, or
-gets a 422 when its body differs, or a 410 when the code it created has since been deleted.
-Any key works, except `rate-limited`, which gets a 429 with a `Retry-After` longer than the
+like the real API: lists take the same filters; access codes can be created, replaced,
+updated and deleted; bad input, such as an expiry in the past (other than a code's current
+one, sent back), gets a 400 in the API's format, and a missing object a 404. A create
+repeating an idempotency key replays the first answer, or gets a 422 when its body differs,
+or a 410 when the code it created has since been deleted.
+Any API key works, except `rate-limited`, which gets a 429 with a `Retry-After` longer than the
 client waits, on every request.
 """
 

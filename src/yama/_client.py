@@ -57,7 +57,7 @@ _ERRORS: dict[int, type[APIStatusError]] = {
 _TRANSPORT_FAILURES = (httpx.TimeoutException, httpx.NetworkError, httpx.RemoteProtocolError)
 # Of those, the ones where the request never left the client, so the API can't have run it.
 _NOT_SENT = (httpx.ConnectError, httpx.ConnectTimeout, httpx.PoolTimeout)
-_OMITTED: Any = object()
+NOT_GIVEN: Any = object()  # an argument left out, where None means something else
 _logger = logging.getLogger("yama")
 
 
@@ -197,29 +197,48 @@ class Yama:
     between threads.
 
     Args:
-        api_key: The API key. Only when it's omitted, `YAMA_API_KEY` is used.
+        api_key: The API key. Defaults to `YAMA_API_KEY`; passing None doesn't fall back to it.
         base_url: Where to send requests; else `YAMA_API_BASE_URL`, else `DEFAULT_BASE_URL`.
         timeout: Seconds allowed for each phase of an attempt (connect, write, read, pool),
             or an `httpx.Timeout` to set them one by one.
         max_retries: How many times to retry a request after a 429, a 5xx or a network error.
         http_client: Your own `httpx.Client` to send through. The client applies its own
             URL, timeout and headers to each request, and leaves closing it to you.
+            An `httpx.AsyncClient` isn't supported.
 
     Raises:
         YamaError: No API key was given.
-        ValueError: The API key isn't printable ASCII without spaces, once stripped.
+        TypeError: `api_key` isn't a string, `timeout` isn't a number of seconds or an
+            `httpx.Timeout`, `max_retries` isn't an int, or `http_client` isn't an
+            `httpx.Client`.
+        ValueError: The API key isn't printable ASCII without spaces, once stripped,
+            `base_url` doesn't start with `https://` or `http://`, or `max_retries` is
+            negative.
     """
+
+    api_key: ApiKeyResource
+    """The API key the client uses: what it may do."""
+    buildings: Buildings
+    """Your buildings."""
+    units: Units
+    """Your units."""
+    contacts: Contacts
+    """The contacts on your units."""
+    codes: Codes
+    """The access codes on your units."""
+    calls: Calls
+    """The call log."""
 
     def __init__(
         self,
-        api_key: str | None = _OMITTED,
+        api_key: str | None = NOT_GIVEN,
         *,
         base_url: str | None = None,
         timeout: float | httpx.Timeout = 30.0,
         max_retries: int = 2,
         http_client: httpx.Client | None = None,
     ) -> None:
-        if api_key is _OMITTED:
+        if api_key is NOT_GIVEN:
             api_key = os.environ.get("YAMA_API_KEY")
         elif api_key is not None and not isinstance(api_key, str):
             raise TypeError("api_key must be a string.")
@@ -231,6 +250,8 @@ class Yama:
         base_url = base_url or os.environ.get("YAMA_API_BASE_URL") or DEFAULT_BASE_URL
         if not base_url.startswith(("https://", "http://")):
             raise ValueError("base_url must start with https:// or http://.")
+        if http_client is not None and not isinstance(http_client, httpx.Client):
+            raise TypeError("http_client must be an httpx.Client: the client isn't async yet.")
 
         self._key = api_key
         self._base_url = base_url.rstrip("/")
@@ -244,23 +265,17 @@ class Yama:
 
     def _attach(self) -> None:
         self.api_key = ApiKeyResource(self)
-        """The API key the client uses: what it may do."""
         self.buildings = Buildings(self)
-        """Your buildings."""
         self.units = Units(self)
-        """Your units."""
         self.contacts = Contacts(self)
-        """The contacts on your units."""
         self.codes = Codes(self)
-        """The access codes on your units."""
         self.calls = Calls(self)
-        """The call log."""
 
     def with_options(
         self,
         *,
-        timeout: float | httpx.Timeout = _OMITTED,
-        max_retries: int = _OMITTED,
+        timeout: float | httpx.Timeout = NOT_GIVEN,
+        max_retries: int = NOT_GIVEN,
     ) -> Yama:
         """A copy of the client with a different `timeout` or `max_retries`, sharing its
         connections, key and base URL, such as a fail-fast client for a web view.
@@ -269,9 +284,9 @@ class Yama:
         both.
         """
         clone = copy.copy(self)
-        if timeout is not _OMITTED:
+        if timeout is not NOT_GIVEN:
             clone._timeout = _check_timeout(timeout)
-        if max_retries is not _OMITTED:
+        if max_retries is not NOT_GIVEN:
             clone._max_retries = _check_max_retries(max_retries)
         clone._owns_http = False
         clone._attach()
