@@ -24,6 +24,8 @@ Lightweight code and lightweight process. Few dependencies, little code, and as 
 
 Zensical is the successor to Material for MkDocs, from the same team; Material went into maintenance mode in November 2025. The site is branded with Yama's colours, Dark Forest `#21212B` and Clay Rose `#E3C8BD`, and the logo and icon in `.github/assets/` (the logo has a Dark Forest variant for light backgrounds and a Clay Rose one for dark). Zensical is young; if it falls short, Material for MkDocs reads the same configuration.
 
+The site stays small: a home page (install and quick start, shared with the README), one guide (configuration, pagination, errors, retries and idempotency, versioning), a reference generated from docstrings, and the changelog. It documents the Python client only. The REST API's own docs stay in Scalar at `/api/v2/docs/`, and the site links to them rather than repeating them. The README stays the front door: short, with the quick start and a link to the site.
+
 httpx is chosen over requests because it offers sync and async clients with one interface, so async can be added later without a rewrite. It also has timeouts on by default and is well typed.
 
 The `justfile` is the single entry point for repeated commands: `just test`, `just lint`, `just check` (everything CI runs), `just schema-pull` and `just release`. CI calls the same recipes, so a green `just check` locally means a green CI run. Recipes wrap uv; they never replace it.
