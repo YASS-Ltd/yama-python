@@ -25,6 +25,9 @@ theme:
   variant: classic  # Zensical: the header in the primary colour, as in Material
   logo: assets/yama-logo-dark.svg
   favicon: assets/yama-icon.svg
+  font:
+    text: Manrope  # Yama's brand typeface
+    code: Roboto Mono
   palette:
     - media: "(prefers-color-scheme: light)"
       scheme: default

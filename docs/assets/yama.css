@@ -39,3 +39,10 @@
 .md-typeset td code {
   white-space: nowrap;
 }
+
+/* The brand sets headings in bold Manrope. */
+.md-typeset h1,
+.md-typeset h2,
+.md-typeset h3 {
+  font-weight: 700;
+}
