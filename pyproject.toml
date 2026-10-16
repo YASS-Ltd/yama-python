@@ -23,10 +23,10 @@ classifiers = [
 
 [project.urls]
 Homepage = "https://yamasystems.com"
-Documentation = "https://app.yamasystems.com/api/v2/docs/"
+Documentation = "https://yass-ltd.github.io/yama-python/"
 Source = "https://github.com/YASS-Ltd/yama-python"
 Issues = "https://github.com/YASS-Ltd/yama-python/issues"
-Changelog = "https://github.com/YASS-Ltd/yama-python/blob/main/CHANGELOG.md"
+"Release notes" = "https://github.com/YASS-Ltd/yama-python/releases"
 
 [dependency-groups]
 dev = [
