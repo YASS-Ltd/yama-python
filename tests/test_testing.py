@@ -87,6 +87,15 @@ def test_test_1_filters_lists(api: httpx.Client) -> None:
     assert everything(api, "calls/", start="2000-01-01", end="2000-01-31") == []
 
 
+def test_test_1_searches_codes_that_have_no_name(api: httpx.Client) -> None:
+    unit = everything(api, "units/")[0]["uuid"]
+    body = {"unit": unit, "code": "98765", "name": None}
+    assert api.post("codes/", json=body).status_code == 201
+    names = [c["name"] for c in everything(api, "codes/", search="")]
+    assert None in names
+    assert everything(api, "codes/", search="no such name") == []
+
+
 @pytest.mark.parametrize(
     ("path", "params", "field"),
     [

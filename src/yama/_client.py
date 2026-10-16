@@ -46,6 +46,9 @@ _ERRORS: dict[int, type[APIStatusError]] = {
     409: ConflictError,
     429: RateLimitError,
 }
+# Retried: the connection failed or broke, or an attempt timed out. Other httpx errors (an
+# unsupported scheme, a bad header, a proxy refusal, too many redirects) would fail again.
+_TRANSPORT_FAILURES = (httpx.TimeoutException, httpx.NetworkError, httpx.RemoteProtocolError)
 _OMITTED: Any = object()
 _logger = logging.getLogger("yama")
 
@@ -60,13 +63,16 @@ def _retry_after(response: httpx.Response) -> int | None:
     return int(value) if value.isdigit() else None
 
 
-def _retry_wait(attempt: int, max_retries: int, response: httpx.Response | None) -> float | None:
-    """Seconds to wait before retrying after `attempt` (from 1) failed with `response`, or with
-    a network error when it's None; None means don't retry."""
+def _retry_wait(
+    attempt: int, max_retries: int, result: httpx.Response | httpx.HTTPError
+) -> float | None:
+    """Seconds to wait before retrying after `attempt` (from 1) failed with `result`, a
+    response or an httpx error; None means don't retry."""
     if attempt > max_retries:
         return None
-    if response is None:
-        return _backoff(attempt)
+    if isinstance(result, httpx.HTTPError):
+        return _backoff(attempt) if isinstance(result, _TRANSPORT_FAILURES) else None
+    response = result
     status = response.status_code
     if status != 429 and status < 500:
         return None
@@ -76,7 +82,7 @@ def _retry_wait(attempt: int, max_retries: int, response: httpx.Response | None)
     return retry_after if retry_after <= _MAX_RETRY_AFTER else None
 
 
-def _status_error(response: httpx.Response) -> APIStatusError:
+def _status_error(request: httpx.Request, response: httpx.Response) -> APIStatusError:
     """The error for a non-2xx response."""
     body: object
     try:
@@ -93,7 +99,14 @@ def _status_error(response: httpx.Response) -> APIStatusError:
             )
         else:
             detail = response.reason_phrase
-    args = (status, detail, body, response.headers.get("API-Version"))
+    args = (
+        status,
+        detail,
+        body,
+        response.headers.get("API-Version"),
+        request.method,
+        request.url.path,
+    )
     error_class = _ERRORS.get(status, ServerError if status >= 500 else APIStatusError)
     if error_class is RateLimitError:
         return RateLimitError(*args, retry_after=_retry_after(response))
@@ -113,13 +126,21 @@ def _success(request: httpx.Request, response: httpx.Response) -> Any:
 
 
 def _connection_error(request: httpx.Request, exc: httpx.HTTPError) -> APIConnectionError:
+    """The error for a failed attempt. It doesn't chain `exc`, which holds the request and so
+    the key."""
     where = f"{request.method} {request.url.path} ({type(exc).__name__})"
     if isinstance(exc, httpx.TimeoutException):
-        error: APIConnectionError = APITimeoutError(f"Request timed out: {where}")
-    else:
-        error = APIConnectionError(f"Connection failed: {where}")
-    error.__cause__ = exc
-    return error
+        return APITimeoutError(f"Request timed out: {where}")
+    return APIConnectionError(f"Connection failed: {where}")
+
+
+def _origin(url: str) -> tuple[str, str, int | None] | None:
+    """A URL's scheme, host and port, or None when it isn't a valid URL."""
+    try:
+        parsed = httpx.URL(url)
+    except httpx.InvalidURL:
+        return None
+    return parsed.scheme, parsed.host, parsed.port
 
 
 def _log(level: int, message: str, request: httpx.Request, **facts: object) -> None:
@@ -147,6 +168,7 @@ class Yama:
 
     Raises:
         YamaError: No API key was given.
+        ValueError: The API key isn't printable ASCII without spaces, once stripped.
     """
 
     def __init__(
@@ -162,13 +184,19 @@ class Yama:
             api_key = os.environ.get("YAMA_API_KEY")
         elif api_key is not None and not isinstance(api_key, str):
             raise TypeError("api_key must be a string.")
+        api_key = (api_key or "").strip()
         if not api_key:
             raise YamaError("No API key: pass api_key, or set YAMA_API_KEY.")
+        if not all("!" <= char <= "~" for char in api_key):
+            raise ValueError("api_key must be printable ASCII without spaces.")
         base_url = base_url or os.environ.get("YAMA_API_BASE_URL") or DEFAULT_BASE_URL
         if not base_url.startswith(("https://", "http://")):
             raise ValueError("base_url must start with https:// or http://.")
         if isinstance(timeout, bool) or not isinstance(timeout, (int, float, httpx.Timeout)):
-            raise TypeError("timeout must be a number of seconds or an httpx.Timeout.")
+            raise TypeError(
+                "timeout must be a number of seconds or an httpx.Timeout; "
+                "for no timeout at all, pass httpx.Timeout(None)."
+            )
         if isinstance(max_retries, bool) or not isinstance(max_retries, int):
             raise TypeError("max_retries must be an int.")
         if max_retries < 0:
@@ -179,6 +207,7 @@ class Yama:
         self._timeout = timeout if isinstance(timeout, httpx.Timeout) else httpx.Timeout(timeout)
         self._max_retries = max_retries
         self._owns_http = http_client is None
+        self._closed = False
         self._http = http_client or httpx.Client()
         self._sleep: Callable[[float], None] = time.sleep
 
@@ -197,7 +226,9 @@ class Yama:
         self.close()
 
     def close(self) -> None:
-        """Close the client's connections, unless they belong to the `http_client` you passed."""
+        """Close the client's connections, unless they belong to the `http_client` you passed.
+        Using the client afterwards raises `ValueError`."""
+        self._closed = True
         if self._owns_http:
             self._http.close()
 
@@ -212,9 +243,15 @@ class Yama:
     ) -> Any:
         """Send a request, retrying as the API allows, and return its parsed JSON.
 
-        `path` is relative to `/api/v2/`, or a full URL such as a page's `next`.
+        `path` is relative to `/api/v2/`, or a full URL such as a page's `next`, which must be
+        on the base URL so the key never goes elsewhere.
         """
+        if self._closed or self._http.is_closed:
+            raise ValueError("The client is closed.")
         url = path if "://" in path else f"{self._base_url}/api/v2/{path}"
+        origin = _origin(url)
+        if origin is None or origin != _origin(self._base_url):
+            raise YamaError("Refusing to follow a URL that isn't on the configured base URL.")
         request = self._http.build_request(
             method,
             url,
@@ -235,9 +272,11 @@ class Yama:
             try:
                 response = self._http.send(request)
             except httpx.HTTPError as exc:
+                result: httpx.Response | httpx.HTTPError = exc
                 error: YamaError = _connection_error(request, exc)
                 outcome = type(exc).__name__
             else:
+                result = response
                 outcome = str(response.status_code)
             _log(
                 logging.DEBUG,
@@ -251,8 +290,8 @@ class Yama:
             if response is not None:
                 if response.is_success:
                     return _success(request, response)
-                error = _status_error(response)
-            wait = _retry_wait(attempt, self._max_retries, response)
+                error = _status_error(request, response)
+            wait = _retry_wait(attempt, self._max_retries, result)
             if wait is None:
                 raise error
             _log(

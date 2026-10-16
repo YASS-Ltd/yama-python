@@ -51,7 +51,8 @@ Yama(
 ```
 
 - `DEFAULT_BASE_URL` is the only place in the code that names Yama's domain (CFG-3).
-- `Yama` is a context manager and has `close()`.
+- `Yama` is a context manager and has `close()`; using it after `close()` raises `ValueError` (ERR-4).
+- The key is stripped of surrounding whitespace, and must then be printable ASCII without spaces, or `Yama()` raises `ValueError` (SEC-1).
 - Resource attributes: `api_key`, `buildings`, `units`, `contacts`, `codes`, `calls`. The key string is private (`_key`).
 - Logs go to `logging.getLogger("yama")`; `yama/__init__.py` adds a `NullHandler` to it (LOG-1 to LOG-3).
 - Waits between retries go through `Yama._sleep` (default `time.sleep`), so tests replace it instead of sleeping.
@@ -82,7 +83,7 @@ Lists take no `limit` or `offset`: the iterator requests pages itself and follow
 
 ## Pagination
 
-Every `list()` returns a plain `Iterator[T]` (a generator) that yields items, never pages, fetching each page as iteration reaches it (PAG-1, PAG-2). It's single-use, like any Python iterator (PAG-5): to use the items twice, call `list(...)` on it. Pages are parsed with a private `_Page` model and never exposed.
+Every `list()` returns a plain `Iterator[T]` (a generator) that yields items, never pages, fetching each page as iteration reaches it (PAG-1, PAG-2). A `next` URL off the configured base URL raises `YamaError` instead of being followed, so the key never goes elsewhere. It's single-use, like any Python iterator (PAG-5): to use the items twice, call `list(...)` on it. Pages are parsed with a private `_Page` model and never exposed.
 
 ## Testing (`yama.testing`)
 
@@ -105,7 +106,7 @@ Use: `Yama(api_key="test", http_client=httpx.Client(transport=fake_transport()))
 YamaError                       # base; also raised for misconfiguration (CFG-2)
 ├── APIConnectionError          # network failure, after retries; nothing may have been sent
 │   └── APITimeoutError         # a request attempt timed out, after retries; it may have been processed
-└── APIStatusError              # any other non-2xx: status_code, detail, body, api_version
+└── APIStatusError              # any other non-2xx: status_code, detail, body, api_version, method, path
     ├── BadRequestError         # 400; .errors: dict[str, list[str]]
     ├── AuthenticationError     # 401
     ├── PermissionDeniedError   # 403
@@ -115,7 +116,7 @@ YamaError                       # base; also raised for misconfiguration (CFG-2)
     └── ServerError             # 5xx
 ```
 
-An error's message is `"<status> <detail>"`, where `detail` is the body's `detail`, or else its field errors joined (`"code: Access code already exists for this unit."`), or else the HTTP reason phrase. Errors hold plain fields only, never the `httpx.Response` (ERR-5). The `codes.create` docstring says to pass a stable `idempotency_key` when the caller's own code may repeat a create, such as a job that re-runs.
+An `APIStatusError`'s message is `"<status> <detail> (<method> <path>)"`, such as `"404 Not found. (GET /api/v2/buildings/<uuid>/)"`, where `detail` is the body's `detail`, or else its field errors joined (`"code: Access code already exists for this unit."`), or else the HTTP reason phrase, and `path` is the URL path without its query string. A connection error's message names the method and path too. Errors hold plain fields only, never the `httpx.Response` or a chained httpx error, which would hold the key (ERR-5, SEC-1). The `codes.create` docstring says to pass a stable `idempotency_key` when the caller's own code may repeat a create, such as a job that re-runs.
 
 ## Implementation Defaults
 

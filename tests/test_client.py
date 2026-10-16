@@ -111,6 +111,11 @@ def test_cfg_4_applies_the_timeout_to_each_phase(
     assert requests[0].extensions["timeout"] == expected
 
 
+def test_cfg_4_rejects_none_pointing_to_httpx_timeout() -> None:
+    with pytest.raises(TypeError, match=r"httpx\.Timeout\(None\)"):
+        Yama(KEY, timeout=None)  # type: ignore[arg-type]
+
+
 @respx.mock
 def test_cfg_4_applies_the_timeout_on_the_clients_own_connection() -> None:
     route = respx.get(f"{DEFAULT_BASE_URL}/api/v2/api-key/").mock(return_value=respond())
@@ -142,6 +147,21 @@ def test_cfg_5_closes_only_its_own_connection() -> None:
     client = Yama(KEY)
     client.close()
     assert client._http.is_closed
+
+
+def test_err_4_raises_value_error_when_the_client_is_closed() -> None:
+    handler, requests = recorder(respond())
+    own = Yama(KEY)
+    own.close()
+    callers_http = httpx.Client(transport=httpx.MockTransport(handler))
+    callers = Yama(KEY, http_client=callers_http)
+    callers.close()
+    closed_by_caller = Yama(KEY, http_client=httpx.Client())
+    closed_by_caller._http.close()
+    for client in (own, callers, closed_by_caller):
+        with pytest.raises(ValueError, match="client is closed"):
+            client._request("GET", "api-key/")
+    assert requests == []
 
 
 # Requests
@@ -195,6 +215,35 @@ def test_sec_1_keeps_the_key_out_of_reprs_errors_logs_and_urls(
     texts += [repr(vars(r)) for r in caplog.records]
     texts += [str(r.url) for r in requests]
     assert not [text for text in texts if KEY in text]
+
+
+def test_sec_1_strips_whitespace_around_the_key() -> None:
+    handler, requests = recorder(respond())
+    client, _ = make_client(handler, api_key=f" {KEY}\n")
+    client._request("GET", "api-key/")
+    assert requests[0].headers["Authorization"] == f"Bearer {KEY}"
+
+
+@pytest.mark.parametrize("key", [f"{KEY} x", f"{KEY}\tx", f"{KEY}\u00e9", f"{KEY}\x00"])
+def test_sec_1_rejects_a_key_that_is_not_printable_ascii_without_the_key_in_the_error(
+    key: str,
+) -> None:
+    with pytest.raises(ValueError) as caught:
+        Yama(key)
+    assert KEY not in str(caught.value)
+    assert KEY not in repr(caught.value)
+
+
+@pytest.mark.parametrize(
+    "failure", [httpx.ConnectError("refused"), httpx.LocalProtocolError("bad header")]
+)
+def test_sec_1_chains_no_httpx_error_holding_the_request(failure: Exception) -> None:
+    handler, _ = recorder(failure)
+    client, _ = make_client(handler, max_retries=0)
+    with pytest.raises(YamaError) as caught:
+        client._request("GET", "codes/")
+    assert caught.value.__cause__ is None
+    assert caught.value.__context__ is None
 
 
 # Package

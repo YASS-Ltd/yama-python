@@ -28,6 +28,25 @@ def test_pag_1_yields_every_item_on_every_page_following_next() -> None:
     assert [str(r.url) for r in requests[1:]] == [PAGE_2, PAGE_3]
 
 
+@pytest.mark.parametrize(
+    "next_url",
+    [
+        "http://app.yamasystems.com/api/v2/codes/?offset=2",
+        "https://elsewhere.example/api/v2/codes/?offset=2",
+        "https://app.yamasystems.com:8443/api/v2/codes/?offset=2",
+        "https://app.yamasystems.com:port/api/v2/codes/?offset=2",
+    ],
+)
+def test_pag_1_follows_next_only_on_the_configured_base_url(next_url: str) -> None:
+    handler, requests = recorder(page([1, 2], next_url), page([3], None))
+    client, _ = make_client(handler)
+    items = client._list("codes/", Item)
+    assert [next(items).n, next(items).n] == [1, 2]
+    with pytest.raises(YamaError, match="base URL"):
+        next(items)
+    assert len(requests) == 1
+
+
 def test_pag_1_yields_nothing_for_an_empty_list() -> None:
     handler, requests = recorder(page([], None))
     client, _ = make_client(handler)

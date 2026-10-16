@@ -230,7 +230,7 @@ class _FakeAPI:
             return _json(400, errors)
         search = query.pop("search", None)
         if search is not None:
-            items = [item for item in items if search.lower() in item["name"].lower()]
+            items = [item for item in items if search.lower() in (item["name"] or "").lower()]
         items = [item for item in items if all(str(item[k]) == v for k, v in query.items())]
         start, size = int(offset), int(limit)
         more = start + size < len(items)

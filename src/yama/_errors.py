@@ -19,9 +19,15 @@ class APIStatusError(YamaError):
     """The API answered with a non-2xx status."""
 
     def __init__(
-        self, status_code: int, detail: str, body: object, api_version: str | None
+        self,
+        status_code: int,
+        detail: str,
+        body: object,
+        api_version: str | None,
+        method: str,
+        path: str,
     ) -> None:
-        super().__init__(status_code, detail, body, api_version)
+        super().__init__(status_code, detail, body, api_version, method, path)
         self.status_code = status_code
         """The HTTP status code."""
         self.detail = detail
@@ -30,9 +36,13 @@ class APIStatusError(YamaError):
         """The parsed JSON body, or its text when it isn't JSON."""
         self.api_version = api_version
         """The response's `API-Version` header."""
+        self.method = method
+        """The request's HTTP method."""
+        self.path = path
+        """The request's URL path, without its query string."""
 
     def __str__(self) -> str:
-        return f"{self.status_code} {self.detail}"
+        return f"{self.status_code} {self.detail} ({self.method} {self.path})"
 
 
 class BadRequestError(APIStatusError):
@@ -72,9 +82,11 @@ class RateLimitError(APIStatusError):
         detail: str,
         body: object,
         api_version: str | None,
+        method: str,
+        path: str,
         retry_after: int | None = None,
     ) -> None:
-        super().__init__(status_code, detail, body, api_version)
+        super().__init__(status_code, detail, body, api_version, method, path)
         self.args = (*self.args, retry_after)
         self.retry_after = retry_after
         """Seconds the API asked the client to wait, from `Retry-After`."""

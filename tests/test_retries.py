@@ -4,13 +4,24 @@ import httpx
 import pytest
 
 from tests.mock import make_client, recorder, respond
-from yama import APIStatusError, RateLimitError, ServerError
+from yama import APIConnectionError, APIStatusError, RateLimitError, ServerError
 
 
 @pytest.mark.parametrize(
     "failure",
-    [respond(429), respond(500), respond(502), respond(503), httpx.ConnectError("refused")],
-    ids=["429", "500", "502", "503", "network"],
+    [
+        respond(429),
+        respond(500),
+        respond(502),
+        respond(503),
+        httpx.ConnectError("refused"),
+        httpx.ConnectTimeout("slow"),
+        httpx.ReadTimeout("slow"),
+        httpx.ReadError("reset"),
+        httpx.WriteError("broken pipe"),
+        httpx.RemoteProtocolError("server disconnected"),
+    ],
+    ids=["429", "500", "502", "503", "connect", "timeout", "read-timeout", "read", "write", "eof"],
 )
 def test_rty_1_retries_and_succeeds(failure: httpx.Response | Exception) -> None:
     handler, requests = recorder(failure, respond(body={"ok": True}))
@@ -29,6 +40,24 @@ def test_rty_1_gives_up_after_max_retries(max_retries: int | None, attempts: int
         client._request("GET", "codes/")
     assert len(requests) == attempts
     assert len(sleeps) == attempts - 1
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [
+        httpx.LocalProtocolError("bad header"),
+        httpx.UnsupportedProtocol("no ftp"),
+        httpx.ProxyError("proxy refused"),
+        httpx.TooManyRedirects("loop"),
+    ],
+)
+def test_rty_1_does_not_retry_errors_that_are_not_transport_failures(failure: Exception) -> None:
+    handler, requests = recorder(failure)
+    client, sleeps = make_client(handler)
+    with pytest.raises(APIConnectionError):
+        client._request("GET", "codes/")
+    assert len(requests) == 1
+    assert sleeps == []
 
 
 def test_rty_2_waits_for_retry_after() -> None:

@@ -40,14 +40,16 @@ def test_err_1_raises_the_class_for_each_status(
     body = {"detail": "Something went wrong."}
     client, _ = make_client(recorder(respond(status, body))[0], max_retries=0)
     with pytest.raises(error_class) as caught:
-        client._request("GET", "codes/")
+        client._request("GET", "codes/", params={"code": "1234"})
     error = caught.value
     assert type(error) is error_class
     assert error.status_code == status
     assert error.detail == "Something went wrong."
     assert error.body == body
     assert error.api_version == "v2"
-    assert str(error) == f"{status} Something went wrong."
+    assert error.method == "GET"
+    assert error.path == "/api/v2/codes/"
+    assert str(error) == f"{status} Something went wrong. (GET /api/v2/codes/)"
 
 
 def test_err_1_handles_a_body_that_is_not_json() -> None:
@@ -57,7 +59,7 @@ def test_err_1_handles_a_body_that_is_not_json() -> None:
         client._request("GET", "codes/")
     assert caught.value.body == "<html>Bad gateway</html>"
     assert caught.value.api_version is None
-    assert str(caught.value) == "502 Bad Gateway"
+    assert str(caught.value) == "502 Bad Gateway (GET /api/v2/codes/)"
 
 
 def test_err_2_exposes_the_400_error_map() -> None:
@@ -71,7 +73,7 @@ def test_err_2_exposes_the_400_error_map() -> None:
     assert caught.value.errors == body
     assert str(caught.value) == (
         "400 code: Access code already exists for this unit.; "
-        "non_field_errors: Something about the whole request."
+        "non_field_errors: Something about the whole request. (POST /api/v2/codes/)"
     )
 
 
@@ -132,11 +134,11 @@ def test_err_4_raises_type_or_value_error_for_invalid_arguments(
         YamaError("No API key."),
         APIConnectionError("Connection failed: ConnectError"),
         APITimeoutError("Request timed out: ReadTimeout"),
-        APIStatusError(405, "Method not allowed.", {"detail": "Method not allowed."}, "v2"),
-        NotFoundError(404, "Not found.", {"detail": "Not found."}, "v2"),
-        BadRequestError(400, "code: Taken.", {"code": ["Taken."]}, "v2"),
-        RateLimitError(429, "Throttled.", {"detail": "Throttled."}, "v2", retry_after=12),
-        ServerError(502, "Bad Gateway", "<html></html>", None),
+        APIStatusError(405, "Not allowed.", {"detail": "Not allowed."}, "v2", "PUT", "/api/v2/x/"),
+        NotFoundError(404, "Not found.", {"detail": "Not found."}, "v2", "GET", "/api/v2/x/"),
+        BadRequestError(400, "code: Taken.", {"code": ["Taken."]}, "v2", "POST", "/api/v2/x/"),
+        RateLimitError(429, "Slow down.", {}, "v2", "GET", "/api/v2/x/", retry_after=12),
+        ServerError(502, "Bad Gateway", "<html></html>", None, "GET", "/api/v2/x/"),
     ],
 )
 def test_err_5_survives_a_pickle_round_trip(error: YamaError) -> None:
