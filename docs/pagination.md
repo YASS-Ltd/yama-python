@@ -12,7 +12,7 @@ client = Yama()
 for unit in client.units.list():
     print(unit.name, unit.door_digit)
 
-first_building = next(client.buildings.list())  # fetches one page only
+first_building = next(client.buildings.list())
 ```
 
 ## Filters

@@ -34,7 +34,7 @@ building = next(view_client().buildings.list())
 
 The client is synchronous for now: each call blocks until it has an answer, and `http_client` must be an `httpx.Client`, not an `httpx.AsyncClient`. Async support is planned for a later release. Until then, run calls in a worker thread so they don't block the event loop. The client is safe to share between threads, so one client still serves the whole process.
 
-Lists fetch their pages as you iterate, so iterate them inside the worker thread too, or the pages are fetched on the event loop:
+Lists make their requests as you iterate, so iterate them inside the worker thread too, or the requests run on the event loop:
 
 ```python
 import asyncio
