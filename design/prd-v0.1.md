@@ -23,7 +23,7 @@ A small, typed, official Python client removes that work and makes the documente
 
 ## Non-goals for v0.1
 
-- Async support. Design for it (see engineering foundations) but don't ship it.
+- Async support. The core is shaped for it (see `design/interface.md`); it comes in a later minor release, when integrators ask for it.
 - A CLI. The TUI demo comes after v0.1, in its own repo.
 - Portal-only features that the API doesn't expose: unit, contact and building writes, API key management, user management.
 - Webhooks or event streaming; the API doesn't offer them.

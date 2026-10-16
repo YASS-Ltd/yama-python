@@ -113,4 +113,10 @@ An error's message is `"<status> <detail>"`.
 
 ## Implementation Defaults
 
-Choices that aren't requirements, recorded so they're consistent: every list requests the API's maximum page size (`limit=500`), for the fewest requests under the rate limit. An open `start` is sent as `2000-01-01` (CALL-2); the live tests confirm the API accepts it. Backoff starts at 0.5 s, doubles, is capped at 8 s, with full jitter. Async isn't in v0.1; keeping request building separate from sending should make an `AsyncYama` a small addition later.
+Choices that aren't requirements, recorded so they're consistent: every list requests the API's maximum page size (`limit=500`), for the fewest requests under the rate limit. An open `start` is sent as `2000-01-01` (CALL-2); the live tests confirm the API accepts it. Backoff starts at 0.5 s, doubles, is capped at 8 s, with full jitter.
+
+Async isn't in v0.1, but the core is shaped so an `AsyncYama` is a small, non-breaking addition later: only sending and sleeping touch I/O.
+
+- Plain functions, free of I/O, build each request (method, URL, headers, query, body), decide whether and how long to wait before a retry, and turn a response into a model or an error.
+- `Yama` is a thin layer over them that sends with `httpx.Client` and waits with `time.sleep`. An `AsyncYama` would be the same layer over `httpx.AsyncClient` and `asyncio.sleep`, reusing every rule.
+- Most tests exercise those functions directly, so they would cover both clients.
