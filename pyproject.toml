@@ -22,8 +22,8 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://getyama.ca"
-Documentation = "https://app.getyama.ca/api/v2/docs/"
+Homepage = "https://yamasystems.com"
+Documentation = "https://app.yamasystems.com/api/v2/docs/"
 Source = "https://github.com/YASS-Ltd/yama-python"
 Issues = "https://github.com/YASS-Ltd/yama-python/issues"
 Changelog = "https://github.com/YASS-Ltd/yama-python/blob/main/CHANGELOG.md"

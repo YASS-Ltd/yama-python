@@ -76,7 +76,7 @@ Yama is moving from `getyama.ca` to `yamasystems.com` now, while no integration 
 
 - `DEFAULT_BASE_URL` is `https://app.yamasystems.com` (host to be confirmed) and is the only place in the code that names the domain. `YAMA_API_BASE_URL` and the `base_url` argument override it.
 - 0.1.0 isn't released until the API answers on the new host. Until then, development and live tests point `YAMA_API_BASE_URL` at the current host, and the vendored schema comes from it.
-- When the new host is live, one change switches the `justfile`'s schema URL, re-vendors the schema, and updates the links in the README, `pyproject.toml`, the issue template config and the docs.
+- `pyproject.toml` already points at the new domain, since its URLs only show on PyPI. When the new host is live, one change switches the `justfile`'s schema URL, re-vendors the schema, and updates the links people can follow today: the README, the issue template config and `AGENTS.md`.
 - The old host can redirect or be retired on the API's own schedule; no released client calls it.
 
 ## Testing Strategy
