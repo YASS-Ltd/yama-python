@@ -10,7 +10,7 @@ Anything not listed here is private. The whole package should stay a few hundred
 src/yama/
   __init__.py      # re-exports everything public below, plus __version__
   _client.py       # Yama, DEFAULT_BASE_URL
-  _pagination.py   # Paginator, Page
+  _pagination.py   # Paginator
   _resources.py    # one small class per resource
   _errors.py       # exception classes
   models.py        # Pydantic models and enums (public module)
@@ -84,14 +84,9 @@ There is no `offset` argument; the paginator follows `next` (PAG-1).
 ```python
 class Paginator(Generic[T]):        # returned by every list()
     def __iter__(self) -> Iterator[T]
-    def pages(self) -> Iterator[Page[T]]
-
-class Page(BaseModel, Generic[T]):
-    count: int
-    next: str | None
-    previous: str | None
-    results: list[T]
 ```
+
+Iterating yields items, never pages (PAG-1). Pages are parsed with a private `_Page` model and never exposed.
 
 ## Models (`yama.models`)
 

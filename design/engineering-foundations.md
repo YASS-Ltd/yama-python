@@ -46,7 +46,7 @@ The rules for what the client exposes and what it hides. They follow the convent
 1. **Hide the mechanics, mirror the domain.** The client takes over everything an integrator would otherwise hand-write: auth, URLs, JSON, pagination, retries, timeouts and error parsing. It invents nothing on top of the API: resources, fields and filters keep the API's names and meanings, so the API docs map one-to-one onto the client. No caching, sync helpers or convenience workflows.
 2. **Correct by default.** Iterating a list follows `next` to the end and de-duplicates the call log. Retries happen only where they can't do harm. Calls time out. The integrator shouldn't need to read the docs to avoid a known trap.
 3. **One way to do each thing.** One method per API operation, one input style (Pydantic request models), no aliases. A second way to do something is a second thing to document, test and keep compatible.
-4. **Escape hatches, not options.** Instead of a setting for every case, offer a few general outlets: pass your own `httpx.Client`, read unknown response fields from the model, drop to `pages()` when you need `count`. Each new constructor argument has to be one most integrators need.
+4. **Escape hatches, not options.** Instead of a setting for every case, offer a few general outlets: pass your own `httpx.Client`, or read unknown response fields from the model. Each new constructor argument has to be one most integrators need.
 
 ### The public surface
 
