@@ -127,6 +127,7 @@ YamaError                       # base; also raised for client misconfiguration
 
 - Retried: 429, 5xx, and `httpx.TransportError`, up to `max_retries` times.
 - Wait: a 429's `Retry-After` when present. Otherwise exponential backoff with jitter, starting at 0.5 s and capped at 8 s. A `Retry-After` over 60 s isn't waited out: the client raises `RateLimitError` straight away.
+- A `409` on `codes.create` (the same key still in flight) is retried too.
 - Every method retries the same way, `codes.create` included, because its `Idempotency-Key` makes a repeated create return the first result instead of making a second code. This depends on the API's idempotency support (see the PRD); 0.1.0 doesn't ship without it.
 - Waiting goes through `Yama._sleep` (default `time.sleep`), so tests replace it rather than sleep.
 
