@@ -41,7 +41,7 @@ Written in [EARS](https://alistairmavin.com/ears/) form: each is one testable se
 - **CFG-1** The client shall use the `api_key` argument as its API key, and only where the caller omits the argument, the `YAMA_API_KEY` environment variable.
 - **CFG-2** If the caller passes `api_key` as `None` or an empty string, or omits it while `YAMA_API_KEY` is unset or empty, then the client shall raise `YamaError` when constructed, without sending a request.
 - **CFG-3** The client shall send requests to the `base_url` argument, or else `YAMA_API_BASE_URL`, or else `https://app.yamasystems.com`.
-- **CFG-4** The client shall apply `timeout` as httpx does: a number of seconds (default 30) limits each phase of a request attempt (connecting, writing, reading, waiting for a pooled connection), and an `httpx.Timeout` sets the phases individually.
+- **CFG-4** The client shall apply `timeout` as httpx does: a number of seconds (default 30) limits each phase of a request attempt (connecting, writing, reading, waiting for a pooled connection), and an `httpx.Timeout` sets the phases individually. `None` is rejected with `TypeError`; `httpx.Timeout(None)` turns timeouts off.
 - **CFG-5** Where the caller provides an `httpx.Client`, the client shall send every request through it with its own base URL, timeout and headers applied per request, and shall leave closing it to the caller.
 
 ### Requests (HTTP)
@@ -53,10 +53,10 @@ Written in [EARS](https://alistairmavin.com/ears/) form: each is one testable se
 
 ### Errors (ERR)
 
-- **ERR-1** When the API returns a non-2xx status, the client shall raise the `APIStatusError` subclass for that status, carrying the status code, the body's `detail`, the parsed body and the `API-Version` header.
+- **ERR-1** When the API returns a non-2xx status, the client shall raise the `APIStatusError` subclass for that status, carrying the status code, the body's `detail`, the parsed body, the `API-Version` header, and the request's method and path (never its query string).
 - **ERR-2** When the API returns 400, the client shall expose its map of keys to messages on the error. Keys name body fields or query parameters, and may include keys that aren't fields at all, such as `non_field_errors`.
 - **ERR-3** If a request still fails at the network level after its retries, then the client shall raise `APIConnectionError`, or its subclass `APITimeoutError` when the last attempt timed out.
-- **ERR-4** The client shall raise only `YamaError` subclasses for failed calls, and `TypeError` or `ValueError` for invalid arguments.
+- **ERR-4** The client shall raise only `YamaError` subclasses for failed calls, and `TypeError` or `ValueError` for invalid arguments. Using a closed client is a programming error, and raises `ValueError`.
 - **ERR-5** The client's exceptions shall survive a pickle round trip with their fields intact.
 
 ### Security (SEC)
@@ -71,7 +71,7 @@ Written in [EARS](https://alistairmavin.com/ears/) form: each is one testable se
 
 ### Retries (RTY)
 
-- **RTY-1** When a request gets a 429, a 5xx or a network error, the client shall retry it, up to `max_retries` times (default 2).
+- **RTY-1** When a request gets a 429, a 5xx or a network error (a connection that fails or breaks, or an attempt that times out), the client shall retry it, up to `max_retries` times (default 2).
 - **RTY-2** When a 429 carries `Retry-After`, the client shall wait that many seconds before retrying.
 - **RTY-3** If `Retry-After` exceeds 60 seconds, then the client shall raise `RateLimitError` without waiting.
 - **RTY-4** When the API gives no `Retry-After`, the client shall wait an increasing, jittered delay between attempts.
@@ -80,7 +80,7 @@ Written in [EARS](https://alistairmavin.com/ears/) form: each is one testable se
 
 ### Pagination (PAG)
 
-- **PAG-1** When the caller iterates a list, the client shall yield every item on every page, following each `next` URL as given until it is null.
+- **PAG-1** When the caller iterates a list, the client shall yield every item on every page, following each `next` URL until it is null, and only while it is on the configured base URL (same scheme, host and port); otherwise it shall raise `YamaError` without sending the request.
 - **PAG-2** The client shall send no request for a list until the caller starts iterating it.
 - **PAG-5** Each call to a list method shall return a new, single-use iterator that starts from the first page; once it's exhausted, it yields nothing more and sends no further requests.
 
