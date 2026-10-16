@@ -137,10 +137,25 @@ info:
     - **403:** no credentials were sent, `{"detail": "Authentication credentials were not provided."}`, or the key's permission is too low for the resource and method: `{"detail": "This API key does not grant Contacts: Read."}`. The permission check runs before any lookup, so a 403 never reveals whether an object exists.
     - **404:** the object doesn't exist, belongs to someone else, or is outside the key's unit access. These look the same on purpose: `{"detail": "No Unit matches the given query."}`.
     - **405:** the endpoint doesn't offer this method; everything but access codes is read-only: `{"detail": "Method \"PATCH\" not allowed."}`.
+    - **409:** a request with the same `Idempotency-Key` is still running (see Retrying a create safely below): `{"detail": "A request with this Idempotency-Key is still in progress. Retry shortly."}`. Wait the `Retry-After` seconds and send the same request again.
+    - **410:** a retried create replayed a code that has since been deleted or is no longer within the key's reach: `{"detail": "The object this request created has since been deleted or is no longer within your reach."}`. The create did happen; don't send it again with the same key.
     - **415:** the body isn't JSON, such as a form-encoded or multipart request: `{"detail": "Unsupported media type \"application/x-www-form-urlencoded\" in request."}`.
+    - **422:** the `Idempotency-Key` was already used with a different request: `{"detail": "This Idempotency-Key was already used with a different request."}`. This is a bug in the client: each create needs its own key.
     - **429:** too many requests (see Rate limits below): `{"detail": "Request was throttled. Expected available in 12 seconds."}`.
 
-    Retry only on 5xx, 429 or network errors, with backoff. Any other 4xx won't succeed unchanged.
+    Retry on 5xx, 429 or network errors, with backoff; a create only when it carries an `Idempotency-Key`, and then on 409 too. Any other 4xx won't succeed unchanged.
+
+    ### Retrying a create safely
+
+    A create that times out or fails with a 5xx may or may not have happened. Send an `Idempotency-Key` header with `POST /api/v2/codes/`, and you can retry it without risk of creating the code twice or being told your own code "already exists":
+
+    - Generate a new unique value, such as a UUID, for each create, and send it as `Idempotency-Key` (1 to 255 characters).
+    - To retry, resend the identical request with the same key. If the first attempt finished, you get its response again, with an `Idempotent-Replayed: true` header, and nothing new is created. If it is still running you get a `409`: wait the `Retry-After` seconds and retry.
+    - **To create a code again, make a new create call with a new key. Never reuse an `Idempotency-Key` from an earlier request**: the same key with a different body is a `422`, and the same key with the same body replays the earlier result instead of creating anything (a `410` if that code has since been deleted).
+    - A replayed success shows the code as it is now, not as it was when it was created, so it reflects later edits.
+    - Keys are remembered for 24 hours from their first use, separately for each API key, and for each user's portal session. Two of your keys never share them.
+    - Only requests that ran are remembered. A 401, 403, 415 or 429, or a bad `Idempotency-Key`, is refused before anything runs, so fix the problem and retry with the same key. A 400 validation error is remembered and replayed: fix the body and send it with a new key. A 5xx is not remembered, so a retry runs the create again.
+    - Other operations ignore the header.
 
     ### Rate limits
 
@@ -221,6 +236,7 @@ info:
     curl -s -X POST "$YAMA_API_BASE_URL/api/v2/codes/" \
       -H "Authorization: Bearer $YAMA_API_KEY" \
       -H "Content-Type: application/json" \
+      -H "Idempotency-Key: $(uuidgen)" \
       -d "{\"unit\": \"$UNIT\", \"name\": \"Dog walker\", \"code\": \"482915\", \"expires_at\": \"2026-11-01T00:00:00Z\"}"
     ```
 
@@ -233,6 +249,7 @@ info:
     - `code` is 3 to 15 digits and must be unique on the unit. `name` is optional. Leave `expires_at` out, or send `null`, for a code that never expires.
     - `expires_at` must be in the future. The code works up to and including that instant and stops after it.
     - Keep the returned `uuid`: it is how you edit or delete the code.
+    - If the request times out or fails with a 5xx, resend it with the same `Idempotency-Key`; see Retrying a create safely. A new code gets a new key.
 
     A code the unit already has:
 
@@ -405,6 +422,7 @@ info:
 
     ```python
     import os
+    import uuid
 
     import requests
 
@@ -438,11 +456,12 @@ info:
     for code in list_all(f"{API}/codes/", unit=unit["uuid"]):
         print("code:", code["name"], code["code"], code["expires_at"])
 
-    # 3. Create a code that expires at a UTC instant
+    # 3. Create a code that expires at a UTC instant. A new key per create; reuse it only to retry this same request.
     created = check(
         session.post(
             f"{API}/codes/",
             json={"unit": unit["uuid"], "name": "Dog walker", "code": "482915", "expires_at": "2026-11-01T00:00:00Z"},
+            headers={"Idempotency-Key": str(uuid.uuid4())},
         )
     ).json()
     print("created:", created)
@@ -906,19 +925,10 @@ paths:
     post:
       operationId: codes_create
       description: |-
-        Create an access code on one of your units. `code` is 3 to 15 digits and unique on the unit. Set `expires_at` (UTC) to make the code stop working after that instant, or leave it out for a code that never expires.
+        Create an access code on one of your units. `code` is 3 to 15 digits and unique on the unit. Set `expires_at` (UTC) to make the code stop working after that instant, or leave it out for a code that never expires. Send an `Idempotency-Key` header to retry a create safely; see Retrying a create safely in the guide.
 
         Requires the API key permission Access codes: Read and write.
       summary: Create an access code
-      parameters:
-      - in: header
-        name: Idempotency-Key
-        schema:
-          type: string
-          minLength: 1
-          maxLength: 255
-        description: A unique value, such as a UUID, for this create, so it can be
-          retried safely.
       tags:
       - codes
       requestBody:
@@ -936,12 +946,28 @@ paths:
               schema:
                 $ref: '#/components/schemas/AccessCode'
           description: ''
+          headers:
+            Idempotent-Replayed:
+              schema:
+                type: string
+                enum:
+                - 'true'
+              description: Present when this response replays an earlier request with
+                the same Idempotency-Key.
         '400':
           description: A field or query parameter is invalid, blank or unknown.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ValidationError'
+          headers:
+            Idempotent-Replayed:
+              schema:
+                type: string
+                enum:
+                - 'true'
+              description: Present when this response replays an earlier request with
+                the same Idempotency-Key.
         '401':
           description: The API key is malformed, unknown, deleted or expired, or no
             key followed `Bearer`.
@@ -963,17 +989,27 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
         '409':
-          description: A request with this Idempotency-Key is still in progress.
+          description: 'A request with this Idempotency-Key is still in progress:
+            retry after the `Retry-After` header''s seconds.'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
         '410':
-          description: A replayed create whose code has since been deleted.
+          description: A replayed create whose object has since been deleted or is
+            out of reach. The create happened; don't recreate it with the same key.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+          headers:
+            Idempotent-Replayed:
+              schema:
+                type: string
+                enum:
+                - 'true'
+              description: Present when this response replays an earlier request with
+                the same Idempotency-Key.
         '422':
           description: This Idempotency-Key was already used with a different request.
           content:
@@ -981,6 +1017,19 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
       x-api-key-permission: codes:write
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 255
+        description: 'A unique value, such as a UUID, for this create, so it can be
+          retried safely. Retrying with the same key and body within 24 hours replays
+          the first response instead of creating again; the same key with a different
+          body is a 422, and a retry while the first is still running is a 409. Never
+          reuse a key from an earlier request: a new create needs a new key.'
   /api/v2/codes/{uuid}/:
     get:
       operationId: codes_retrieve
@@ -1516,9 +1565,6 @@ components:
   schemas:
     AccessCode:
       type: object
-      description: |-
-        For serializers: a request body field that is read-only (such as `uuid`) or that the serializer doesn't have is a
-        400 naming it, never silently dropped, so a caller who thinks it set a field finds out (TASK-237.13).
       properties:
         uuid:
           type: string
@@ -1545,9 +1591,6 @@ components:
       - uuid
     AccessCodeRequest:
       type: object
-      description: |-
-        For serializers: a request body field that is read-only (such as `uuid`) or that the serializer doesn't have is a
-        400 naming it, never silently dropped, so a caller who thinks it set a field finds out (TASK-237.13).
       properties:
         unit:
           type: string
@@ -1737,8 +1780,7 @@ components:
             time; null for a unit outside any building.
         reference:
           type: string
-          description: A short reference for the call (the end of its Twilio call
-            SID); quote it to Yama support.
+          description: A short reference for the call; quote it to Yama support.
         started_at:
           type: string
           format: date-time
@@ -2077,9 +2119,6 @@ components:
             $ref: '#/components/schemas/Unit'
     PatchedAccessCodeRequest:
       type: object
-      description: |-
-        For serializers: a request body field that is read-only (such as `uuid`) or that the serializer doesn't have is a
-        400 naming it, never silently dropped, so a caller who thinks it set a field finds out (TASK-237.13).
       properties:
         unit:
           type: string

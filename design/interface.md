@@ -102,7 +102,6 @@ Use: `Yama(api_key="test", http_client=httpx.Client(transport=fake_transport()))
 - **Requests:** `AccessCodeCreate` (`unit: UUID`, `code: str`, `name: str | None = None`, `expires_at: AwareDatetime | None = None`) and `AccessCodeUpdate` (the same fields, all optional). `extra="forbid"` (MOD-4).
 - **Enums**, as `str` enums: `CallResult`, `CallStepKind`, `CodeAttemptResult`, `DialStatus`, `DoorDigit`, `AccessLevel` (`none`/`read`/`write`) and `UnitAccessType`. Response fields are typed `Enum | str` with left-to-right union mode (MOD-3). Members are the values upper-cased, with `-` as `_` (`DialStatus.NO_ANSWER`); `DoorDigit` members are `ZERO` to `NINE`. Compare with `==` (`call.result == CallResult.REJECTED`), which works for both forms without type narrowing.
 - **Known schema bug:** `ApiKeyDetails.expires_at` and `last_used_at` are `datetime | None`, although the schema marks them non-nullable; the API really returns `null`. A fix is filed upstream. Until it lands, the contract tests allow this one difference.
-- **Not yet in the published schema:** `POST codes/` taking an `Idempotency-Key` header, with its 409, 410 and 422 responses. The vendored copy has them added by hand, as the API's docs describe them, until `just schema-pull` brings in the published version.
 
 ## Errors
 
