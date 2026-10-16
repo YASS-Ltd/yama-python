@@ -4,7 +4,7 @@ This repo is the official Python client for the Yama REST API. It is **public**:
 
 Yama is a cloud-based SaaS platform for managing access control (intercom/dialer call routing, access codes) in condos and apartment buildings.
 
-**Status:** pre-release. `docs/` is the published docs site; internal scope and design are in `design/prd-v0.1.md`, `design/engineering-foundations.md` and `design/interface.md` (the public interface every change must follow).
+**Status:** 0.1.0 is released on PyPI. `docs/` is the published docs site; internal scope and design are in `design/prd-v0.1.md`, `design/engineering-foundations.md` and `design/interface.md` (the public interface every change must follow).
 
 **Guiding star: lightweight.** Lightweight code and lightweight process. Prefer less code, fewer dependencies, fewer steps and fewer rules (see `design/engineering-foundations.md`).
 
