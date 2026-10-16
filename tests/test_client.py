@@ -149,6 +149,46 @@ def test_cfg_5_closes_only_its_own_connection() -> None:
     assert client._http.is_closed
 
 
+def test_cfg_6_with_options_returns_a_copy_sharing_the_connections() -> None:
+    handler, requests = recorder(respond(503), respond(body={"ok": True}))
+    client, _ = make_client(handler, base_url="https://yama.example")
+    fast = client.with_options(timeout=2, max_retries=0)
+    assert fast is not client
+    assert fast._http is client._http
+    with pytest.raises(yama.ServerError):
+        fast.api_key.get()
+    assert requests[0].extensions["timeout"]["read"] == 2
+    assert requests[0].headers["Authorization"] == f"Bearer {KEY}"
+    assert str(requests[0].url) == "https://yama.example/api/v2/api-key/"
+    assert client._request("GET", "api-key/") == {"ok": True}
+    assert requests[1].extensions["timeout"]["read"] == 30
+    assert repr(fast) == repr(client)
+
+
+def test_cfg_6_with_options_keeps_settings_not_given() -> None:
+    client, _ = make_client(recorder(respond())[0], timeout=4, max_retries=5)
+    assert client.with_options()._timeout == client._timeout
+    assert client.with_options(timeout=1)._max_retries == 5
+    assert client.with_options(max_retries=0)._timeout == httpx.Timeout(4)
+    with pytest.raises(TypeError):
+        client.with_options(timeout=None)  # type: ignore[arg-type]
+    with pytest.raises(ValueError):
+        client.with_options(max_retries=-1)
+
+
+def test_cfg_6_closing_the_copy_leaves_the_original_open() -> None:
+    handler, _ = recorder(respond())
+    with Yama(KEY) as client:
+        client._http = httpx.Client(transport=httpx.MockTransport(handler))
+        with client.with_options(max_retries=0) as fast:
+            fast._request("GET", "api-key/")
+        assert not client._http.is_closed
+        client._request("GET", "api-key/")
+        fast_after_close = client.with_options(timeout=1)
+    with pytest.raises(ValueError, match="client is closed"):
+        fast_after_close._request("GET", "api-key/")
+
+
 def test_err_4_raises_value_error_when_the_client_is_closed() -> None:
     handler, requests = recorder(respond())
     own = Yama(KEY)

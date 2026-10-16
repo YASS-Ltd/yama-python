@@ -55,7 +55,7 @@ Create a key in the Yama portal under **Settings › API keys**. Keep it in an e
 
 - **Typed:** Pydantic models with UTC-aware datetimes, so your editor autocompletes.
 - **Every page:** iterating a list follows `next` to the end, and the call log is de-duplicated.
-- **Safe retries:** only on 5xx, 429 (honouring `Retry-After`) and network errors.
+- **Safe retries:** on 429 (honouring `Retry-After`), and on 5xx and network errors only for reads and for creates, which carry an `Idempotency-Key` so a code is never created twice.
 - **Clear errors:** one exception class per kind of failure, listed in the [docs](https://yass-ltd.github.io/yama-python/).
 - **Forward-compatible:** new fields and enum values from the API don't break your code.
 - **Small:** two dependencies, httpx and Pydantic. Python 3.10 and newer.

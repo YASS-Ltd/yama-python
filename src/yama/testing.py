@@ -8,9 +8,11 @@
 
 The fake holds a few made-up buildings, units, contacts, access codes and calls, and behaves
 like the real API: lists page with `limit`, `offset` and `next`, and take the same filters;
-access codes can be created (honouring `Idempotency-Key`), replaced, updated and deleted;
-bad input gets the same 400s, and a missing object a 404. Any key works, except `rate-limited`,
-which gets a 429 with a `Retry-After` longer than the client waits, on every request.
+access codes can be created, replaced, updated and deleted; bad input gets the same 400s, and
+a missing object a 404. A create repeating an `Idempotency-Key` replays the first answer, or
+gets a 422 when its body differs, or a 410 when the code it created has since been deleted.
+Any key works, except `rate-limited`, which gets a 429 with a `Retry-After` longer than the
+client waits, on every request.
 """
 
 from __future__ import annotations
@@ -176,7 +178,7 @@ class _FakeAPI:
     def __init__(self) -> None:
         self._lock = threading.Lock()
         self._data = {name: {i["uuid"]: i for i in copy.deepcopy(v)} for name, v in _DATA.items()}
-        self._created: dict[str, dict[str, Any]] = {}  # by Idempotency-Key
+        self._created: dict[str, tuple[object, int, Any]] = {}  # by Idempotency-Key
 
     def handle(self, request: httpx.Request) -> httpx.Response:
         if request.headers.get("Authorization") == "Bearer rate-limited":
@@ -247,13 +249,38 @@ class _FakeAPI:
         )
 
     def _write_code(self, request: httpx.Request, current: dict[str, Any] | None) -> httpx.Response:
-        key = request.headers.get("Idempotency-Key")
-        if current is None and key in self._created:
-            return _json(201, self._created[key])
         try:
             body = json.loads(request.content)
         except ValueError:
             body = None
+        key = request.headers.get("Idempotency-Key") if current is None else None
+        if key is not None and key in self._created:
+            return self._replay(body, *self._created[key])
+        response = self._apply_code(request, body, current)
+        if key is not None:
+            outcome = response.json()
+            saved = outcome["uuid"] if response.status_code == 201 else outcome
+            self._created[key] = (body, response.status_code, saved)
+        return response
+
+    def _replay(self, body: object, first_body: object, status: int, saved: Any) -> httpx.Response:
+        """The answer to a create repeating an earlier `Idempotency-Key`."""
+        if body != first_body:
+            detail = "This Idempotency-Key was already used with a different request."
+            return _json(422, {"detail": detail})
+        replayed = {"Idempotent-Replayed": "true"}
+        if status != 201:
+            return _json(status, saved, replayed)
+        code = self._data["codes"].get(saved)
+        if code is None:
+            detail = "The object this request created has since been deleted."
+            return _json(410, {"detail": detail}, replayed)
+        return _json(201, code, replayed)
+
+    def _apply_code(
+        self, request: httpx.Request, body: object, current: dict[str, Any] | None
+    ) -> httpx.Response:
+        """Create, replace or update a code from `body`, or answer 400."""
         if not isinstance(body, dict):
             return _json(400, {"non_field_errors": ["Send a JSON object."]})
         errors = {k: ["Unknown field."] for k in body if k not in _CODE_FIELDS}
@@ -276,11 +303,7 @@ class _FakeAPI:
         if errors:
             return _json(400, errors)
         self._data["codes"][new["uuid"]] = new
-        if current is not None:
-            return _json(200, new)
-        if key is not None:
-            self._created[key] = new
-        return _json(201, new)
+        return _json(201 if current is None else 200, new)
 
 
 def _date_range(

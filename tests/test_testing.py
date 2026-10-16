@@ -191,3 +191,42 @@ def test_test_1_rate_limits_on_demand(api: httpx.Client) -> None:
     client = Yama(api_key="rate-limited", http_client=httpx.Client(transport=fake_transport()))
     with pytest.raises(RateLimitError):
         client._request("GET", "codes/")
+
+
+def test_test_1_replays_a_create_with_its_current_state(api: httpx.Client) -> None:
+    unit = everything(api, "units/")[0]["uuid"]
+    headers = {"Idempotency-Key": "replay-current"}
+    body = {"unit": unit, "code": "55555"}
+    code = api.post("codes/", json=body, headers=headers).json()
+    api.patch(f"codes/{code['uuid']}/", json={"name": "Renamed"})
+    again = api.post("codes/", json=body, headers=headers)
+    assert again.status_code == 201
+    assert again.headers["Idempotent-Replayed"] == "true"
+    assert again.json()["name"] == "Renamed"
+
+
+def test_test_1_replays_a_rejected_create(api: httpx.Client) -> None:
+    headers = {"Idempotency-Key": "replay-400"}
+    first = api.post("codes/", json={"code": "1"}, headers=headers)
+    again = api.post("codes/", json={"code": "1"}, headers=headers)
+    assert (first.status_code, again.status_code) == (400, 400)
+    assert first.json() == again.json()
+
+
+def test_test_1_rejects_a_reused_idempotency_key_with_a_different_body(api: httpx.Client) -> None:
+    unit = everything(api, "units/")[0]["uuid"]
+    headers = {"Idempotency-Key": "reused"}
+    assert api.post("codes/", json={"unit": unit, "code": "55555"}, headers=headers).is_success
+    response = api.post("codes/", json={"unit": unit, "code": "55556"}, headers=headers)
+    assert response.status_code == 422
+    assert "Idempotency-Key" in response.json()["detail"]
+
+
+def test_test_1_answers_410_when_a_replayed_create_was_deleted(api: httpx.Client) -> None:
+    unit = everything(api, "units/")[0]["uuid"]
+    headers = {"Idempotency-Key": "gone"}
+    body = {"unit": unit, "code": "55555"}
+    code = api.post("codes/", json=body, headers=headers).json()
+    assert api.delete(f"codes/{code['uuid']}/").status_code == 204
+    response = api.post("codes/", json=body, headers=headers)
+    assert response.status_code == 410

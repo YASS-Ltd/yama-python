@@ -43,6 +43,7 @@ Written in [EARS](https://alistairmavin.com/ears/) form: each is one testable se
 - **CFG-3** The client shall send requests to the `base_url` argument, or else `YAMA_API_BASE_URL`, or else `https://app.yamasystems.com`.
 - **CFG-4** The client shall apply `timeout` as httpx does: a number of seconds (default 30) limits each phase of a request attempt (connecting, writing, reading, waiting for a pooled connection), and an `httpx.Timeout` sets the phases individually. `None` is rejected with `TypeError`; `httpx.Timeout(None)` turns timeouts off.
 - **CFG-5** Where the caller provides an `httpx.Client`, the client shall send every request through it with its own base URL, timeout and headers applied per request, and shall leave closing it to the caller.
+- **CFG-6** When the caller calls `with_options()` with a `timeout` or `max_retries`, the client shall return a copy that uses them and shares the original's connections, API key and base URL, leaving the original unchanged and open when the copy is closed.
 
 ### Requests (HTTP)
 
@@ -53,7 +54,7 @@ Written in [EARS](https://alistairmavin.com/ears/) form: each is one testable se
 
 ### Errors (ERR)
 
-- **ERR-1** When the API returns a non-2xx status, the client shall raise the `APIStatusError` subclass for that status, carrying the status code, the body's `detail`, the parsed body, the `API-Version` header, and the request's method and path (never its query string).
+- **ERR-1** When the API returns a non-2xx status, the client shall raise the `APIStatusError` subclass for that status (or `APIStatusError` itself for a status without one), carrying the status code, the body's `detail`, the parsed body, the `API-Version` header, and the request's method and path (never its query string).
 - **ERR-2** When the API returns 400, the client shall expose its map of keys to messages on the error. Keys name body fields or query parameters, and may include keys that aren't fields at all, such as `non_field_errors`.
 - **ERR-3** If a request still fails at the network level after its retries, then the client shall raise `APIConnectionError`, or its subclass `APITimeoutError` when the last attempt timed out.
 - **ERR-4** The client shall raise only `YamaError` subclasses for failed calls, and `TypeError` or `ValueError` for invalid arguments. Using a closed client is a programming error, and raises `ValueError`.
@@ -71,12 +72,13 @@ Written in [EARS](https://alistairmavin.com/ears/) form: each is one testable se
 
 ### Retries (RTY)
 
-- **RTY-1** When a request gets a 429, a 5xx or a network error (a connection that fails or breaks, or an attempt that times out), the client shall retry it, up to `max_retries` times (default 2).
-- **RTY-2** When a 429 carries `Retry-After`, the client shall wait that many seconds before retrying.
-- **RTY-3** If `Retry-After` exceeds 60 seconds, then the client shall raise `RateLimitError` without waiting.
+- **RTY-1** When a request gets a 429, a 5xx or a network error (a connection that fails or breaks, or an attempt that times out), the client shall retry it, up to `max_retries` times (default 2), except as RTY-7 says.
+- **RTY-2** When a 429, or a 409 that RTY-6 retries, carries `Retry-After`, the client shall wait that many seconds before retrying.
+- **RTY-3** If `Retry-After` exceeds 60 seconds, then the client shall raise the error (`RateLimitError` or `ConflictError`) without waiting.
 - **RTY-4** When the API gives no `Retry-After`, the client shall wait an increasing, jittered delay between attempts.
 - **RTY-5** If a request gets a 4xx other than 429, then the client shall not retry it, except as RTY-6 allows.
-- **RTY-6** When creating an access code gets a 409 (its idempotency key still in flight), the client shall retry it like any other retry, counting it against `max_retries` and waiting as RTY-4 says.
+- **RTY-6** When a request carrying an `Idempotency-Key` gets a 409 (that key still in flight), the client shall retry it like any other retry, counting it against `max_retries` and waiting as RTY-2 and RTY-4 say.
+- **RTY-7** If a request that is not a GET and carries no `Idempotency-Key` gets a 5xx or a network error after connecting (so the API may have run it), then the client shall raise the error without retrying.
 
 ### Pagination (PAG)
 

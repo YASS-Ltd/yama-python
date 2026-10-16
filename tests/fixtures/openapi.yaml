@@ -910,6 +910,15 @@ paths:
 
         Requires the API key permission Access codes: Read and write.
       summary: Create an access code
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 255
+        description: A unique value, such as a UUID, for this create, so it can be
+          retried safely.
       tags:
       - codes
       requestBody:
@@ -949,6 +958,24 @@ paths:
                 $ref: '#/components/schemas/Error'
         '429':
           description: 'Rate limited: retry after the `Retry-After` header''s seconds.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: A request with this Idempotency-Key is still in progress.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '410':
+          description: A replayed create whose code has since been deleted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: This Idempotency-Key was already used with a different request.
           content:
             application/json:
               schema:
