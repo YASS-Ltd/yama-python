@@ -69,35 +69,6 @@ A job queue may run a task twice: a retry after a timeout, a worker that died pa
 - **Send the same data with the same key.** Work out anything that changes from run to run, such as an `expires_at` computed from the current time, once, outside the part that re-runs, and pass it in.
 - **After a `BadRequestError`, use a new key.** The API replays a 400 for the key that got it, for 24 hours, so a corrected create needs a key of its own.
 
-With Celery, compute `expires_at` when you enqueue the task:
-
-<!-- not run -->
-
-```python
-from datetime import datetime, timedelta, timezone
-
-from celery import shared_task
-
-from myapp.clients import yama_client
-from yama import AccessCodeCreate, APIConnectionError, ConflictError, ServerError
-
-
-@shared_task(bind=True, max_retries=5)
-def create_guest_code(self, booking_id: int, unit: str, code: str, expires_at: str) -> str:
-    data = AccessCodeCreate(unit=unit, code=code, name="Guest", expires_at=expires_at)
-    try:
-        created = yama_client().codes.create(data, idempotency_key=f"booking-{booking_id}")
-    except (APIConnectionError, ConflictError, ServerError) as error:
-        raise self.retry(exc=error, countdown=60)  # same key and data next time
-    return str(created.uuid)
-
-
-expires_at = datetime.now(timezone.utc) + timedelta(days=7)  # once, before enqueueing
-create_guest_code.delay(booking.id, str(unit.uuid), "4821", expires_at.isoformat())
-```
-
-If you let the client generate the key instead, read it from the error inside the task, as `error.idempotency_key`, and pass it on to the retry. Don't rely on it outside the task: Celery's JSON result backend rebuilds an exception from its arguments only, so the attribute is gone by the time a caller looks at the task's result.
-
 ## Creates from web forms
 
 A form can be submitted twice, by a double click or a retried request. Generate a key when you render the form and carry it in a hidden field, so a second submit of the same form returns the same code. When the API answers 400, show the form again with a new key, since the corrected submit is different data.
