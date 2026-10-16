@@ -2,7 +2,7 @@
 
 ## The client
 
-The client follows [Semantic Versioning](https://semver.org/). Before 1.0, a minor release (0.1 to 0.2) may change the interface, and the [changelog](changelog.md) says what changed and how to update your code; patch releases never break it. Pin to a minor version until then:
+The client follows [Semantic Versioning](https://semver.org/). Before 1.0, a minor release (0.1 to 0.2) may change the interface, and the [changelog](https://github.com/YASS-Ltd/yama-python/releases) says what changed and how to update your code; patch releases never break it. Pin to a minor version until then:
 
 ```console
 uv add "yama>=0.1,<0.2"
