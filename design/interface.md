@@ -42,7 +42,7 @@ with Yama() as client:                       # api_key from YAMA_API_KEY
 Yama(
     api_key: str | None = None,          # falls back to YAMA_API_KEY
     *,
-    base_url: str | None = None,         # falls back to YAMA_API_BASE_URL, then https://app.getyama.ca
+    base_url: str | None = None,         # falls back to YAMA_API_BASE_URL, then DEFAULT_BASE_URL
     timeout: float = 30.0,               # seconds, per request
     max_retries: int = 2,                # retries after the first attempt
     http_client: httpx.Client | None = None,  # for tests and custom transports
@@ -50,6 +50,7 @@ Yama(
 ```
 
 - No key from either source raises `YamaError` at construction.
+- `DEFAULT_BASE_URL` (in `_client.py`, currently `https://app.getyama.ca`) is the only place in the code that names Yama's domain.
 - `Yama` is a context manager and has `close()`. It closes the `httpx.Client` only if it created it.
 - Attributes: `api_key`, `buildings`, `units`, `contacts`, `codes`, `calls` (resources, below). The key string itself is private (`_key`) and appears in no `repr`, log line, exception or URL.
 - Every request sends `Authorization: Bearer <key>`, `Accept: application/json` and `User-Agent: yama-python/<version> python/<major.minor>`.
@@ -101,7 +102,7 @@ Nothing is requested until iteration starts. Each `next` URL is requested as giv
 Response models mirror the schema's components field for field: `ApiKey` (with `ApiKeyPermissions`, `ApiKeyUnitAccess`), `Building`, `Unit`, `Contact`, `AccessCode`, `CallLogEntry`, `CallLogStep`.
 
 - **Responses** are frozen and keep unknown fields (`ConfigDict(extra="allow", frozen=True)`), so a field added within v2 is readable before the client knows about it.
-- **Requests** forbid unknown fields (`extra="forbid"`), catching typos before the API's 400 would. `AccessCodeCreate`: `unit: UUID`, `code: str` (1-15 chars), `name: str | None = None`, `expires_at: AwareDatetime | None = None`. `AccessCodeUpdate`: the same fields, all optional.
+- **Requests** forbid unknown fields (`extra="forbid"`), catching typos before the API's 400 would. `AccessCodeCreate`: `unit: UUID`, `code: str`, `name: str | None = None`, `expires_at: AwareDatetime | None = None`. `AccessCodeUpdate`: the same fields, all optional.
 - **Types:** `uuid` fields are `UUID`, datetimes are timezone-aware `datetime`s, and the dates the client sends are `date`s.
 - **Enums** are `str` enums, so members equal their string values: `CallResult`, `CallStepKind`, `CodeAttemptResult`, `DialStatus`, `DoorDigit`, `AccessLevel` (`none`/`read`/`write`) and `UnitAccessType`. Response fields are typed `Enum | str` with left-to-right union mode, so a value the client doesn't know arrives as a plain `str` rather than an error.
 
@@ -125,7 +126,7 @@ YamaError                       # base; also raised for client misconfiguration
 
 - Retried: 429, 5xx, and `httpx.TransportError`, up to `max_retries` times.
 - Wait: a 429's `Retry-After` when present. Otherwise exponential backoff with jitter, starting at 0.5 s and capped at 8 s. A `Retry-After` over 60 s isn't waited out: the client raises `RateLimitError` straight away.
-- `POST` (creating a code) is retried only on 429 and on connection errors raised before the request was sent (`httpx.ConnectError`, `httpx.ConnectTimeout`). Retrying it after a 5xx or a read timeout could create the code twice.
+- `POST` (creating a code) is retried only on 429 and on connection errors raised before the request was sent (`httpx.ConnectError`, `httpx.ConnectTimeout`). After a 5xx or a read timeout the code may or may not exist, and retrying could create it twice, so the client raises instead, and the error's message says the code may have been created. Once the API accepts an idempotency key, the client will send one with every create and retry it like any other request.
 - Waiting goes through `Yama._sleep` (default `time.sleep`), so tests replace it rather than sleep.
 
 ## Out of Scope for v0.1

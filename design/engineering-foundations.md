@@ -35,16 +35,46 @@ The `justfile` is the single entry point for repeated commands: `just test`, `ju
 - Drops happen in a minor release and are announced in the changelog. pip honours `requires-python`, so integrators on a dropped version keep getting the last release that supports it.
 - Review this at each Ubuntu LTS end-of-standard-support date and each new CPython release. 3.10 is expected to go around April 2027.
 
-## Design Principles
+## Library Principles
 
-1. **The schema is the contract.** The published OpenAPI schema from `https://app.getyama.ca/api/v2/schema/` is vendored in the repo as a test fixture. The client and its models are hand-written, and contract tests check them against the vendored schema. CI flags when the vendored copy drifts from the published one; updating it, and the client to match, is a deliberate change.
-2. **Correct by default.** Iterating a list follows `next` to the end, and retries happen only where the API says they're safe (5xx, 429 with `Retry-After`, network errors). Calls time out by default. The integrator shouldn't have to read the docs to avoid a known trap.
-3. **Resource-oriented interface that speaks Pydantic:** `client.codes.list(unit=...)`, `client.codes.create(AccessCodeCreate(...))`, `client.calls.list(start=..., end=...)`. It mirrors the API's URLs, so the API docs map directly onto the client. Methods take and return Pydantic models.
-4. **Typed errors.** One base `YamaError`, with `APIConnectionError` for network failures and `APIStatusError` subclasses by HTTP status: `BadRequestError` (carrying the field-to-messages map), `AuthenticationError` (401), `PermissionDeniedError` (403), `NotFoundError`, `RateLimitError` (carrying `retry_after`) and `ServerError`. Every status error keeps the status, the parsed body and the `API-Version` header. Names and details are in `design/interface.md`.
-5. **Additive tolerance.** Models accept unknown response fields, since the API may add fields within v2, and unknown enum values pass through as strings, so a new call `result` doesn't break existing integrations.
-6. **Keys stay secret.** The key appears in no `repr`, log line, exception message or URL. The client reads `YAMA_API_KEY` if no key is passed, as in the integrator guide, and the base URL defaults to production unless overridden.
-7. **Small dependency footprint.** Runtime dependencies are httpx and Pydantic, nothing else, each with the lowest version floor the code allows. Every extra dependency is a version conflict waiting in someone else's project.
-8. **Identify the client.** Requests send `User-Agent: yama-python/<version> python/<version>`, so the server's logs show which client versions are in use.
+The rules for what the client exposes and what it hides. They follow the conventions of well-liked Python API clients (httpx, Stripe, OpenAI) rather than inventing new ones; an integrator who has used one of those should feel at home. Each rule earns its place by preventing a known mistake. Add a rule only when a real decision needs it, and give its reason.
+
+### What to abstract
+
+1. **Hide the mechanics, mirror the domain.** The client takes over everything an integrator would otherwise hand-write: auth, URLs, JSON, pagination, retries, timeouts and error parsing. It invents nothing on top of the API: resources, fields and filters keep the API's names and meanings, so the API docs map one-to-one onto the client. No caching, sync helpers or convenience workflows.
+2. **Correct by default.** Iterating a list follows `next` to the end and de-duplicates the call log. Retries happen only where they can't do harm. Calls time out. The integrator shouldn't need to read the docs to avoid a known trap.
+3. **One way to do each thing.** One method per API operation, one input style (Pydantic request models), no aliases. A second way to do something is a second thing to document, test and keep compatible.
+4. **Escape hatches, not options.** Instead of a setting for every case, offer a few general outlets: pass your own `httpx.Client`, read unknown response fields from the model, drop to `pages()` when you need `count`. Each new constructor argument has to be one most integrators need.
+
+### The public surface
+
+5. **Small and explicit.** The public interface is what `yama/__init__.py` and `yama.models` export, as listed in `design/interface.md`. Everything else is underscore-private. Adding to the surface is easy; removing from it is a breaking change, so add reluctantly.
+6. **Typed and documented.** Every public name has type hints and a docstring, mypy runs in strict mode, and the package ships `py.typed`. Editor autocompletion should be enough to use the client.
+7. **Our errors, not our dependencies'.** Every failure the client raises is a `YamaError`; httpx and Pydantic exceptions never leak out of a call. The exception is programmer error, such as a wrong argument type or `start` without `end`, which raises the usual `TypeError` or `ValueError`.
+
+### Compatibility
+
+8. **Tolerant reader, strict writer.** Responses accept unknown fields and pass unknown enum values through as strings, since v2 grows additively. Requests reject unknown fields locally. The client checks types and required fields, but leaves value rules (lengths, formats, uniqueness) to the API, so a rule the API relaxes doesn't need a client release.
+9. **Deprecate before removing.** Before 1.0, a minor release may break the interface, and the changelog says how to migrate. From 1.0, a removal or rename first warns with `DeprecationWarning` for at least one minor release.
+10. **Wide dependency ranges.** Runtime dependencies are httpx and Pydantic only, each with the lowest floor the code allows and no upper bound. Every extra or pinned dependency is a version conflict waiting in someone else's project.
+
+### Behaviour
+
+11. **No surprises.** Importing `yama` does nothing but define things: no network, no logging configuration, no printing, no warnings. There is no global client and no hidden state. Configuration comes from arguments, with only `YAMA_API_KEY` and `YAMA_API_BASE_URL` as environment fallbacks. A `Yama` instance is safe to share between threads.
+12. **Keys stay secret.** The key appears in no `repr`, log line, exception message or URL.
+13. **Identify the client.** Requests send `User-Agent: yama-python/<version> python/<version>`, so the server's logs show which client versions are in use.
+
+### The schema is the contract
+
+The published OpenAPI schema is vendored as `tests/fixtures/openapi.yaml`. The client and its models are hand-written, and contract tests check them against the vendored copy. A daily CI job flags when the published schema drifts from it; updating the copy, and the client to match, is a deliberate change.
+
+## Yama's Domain
+
+Yama's main domain will move from `getyama.ca` to `yamasystems.com`. The client should survive that without breaking installed versions:
+
+- The code names the domain once, in `DEFAULT_BASE_URL`. `YAMA_API_BASE_URL` and the `base_url` argument override it, so integrators can switch before a release does.
+- Installed clients keep calling the old host, so the API has to keep answering on `app.getyama.ca` for a long transition, ideally at least a year. Answering means serving the API, not redirecting: httpx doesn't follow redirects by default, a redirected `POST` can turn into a `GET`, and a redirect to another host drops the `Authorization` header.
+- When the new host is live, a minor release changes `DEFAULT_BASE_URL`, re-vendors the schema (its `servers` entry changes) and updates the links in the README, `pyproject.toml`, the `justfile` and the issue template config. The changelog tells integrators who pin the old host to switch.
 
 ## Testing Strategy
 
