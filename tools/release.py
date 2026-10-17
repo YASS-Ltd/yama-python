@@ -53,7 +53,7 @@ def bullets(body: str) -> list[Bullet]:
 def next_version(current: str, found: list[Bullet]) -> tuple[str, str]:
     """The version after `current` that `found` calls for, and why."""
     major, minor, patch = (int(n) for n in current.split("."))
-    if any(tag == "Removed" or text.startswith("Breaking:") for tag, text in found):
+    if any(tag == "Removed" or text.lower().startswith("breaking:") for tag, text in found):
         reason = "a [Removed] or Breaking: bullet is a major bump"
         if major == 0:
             return f"0.{minor + 1}.0", reason + ", a minor one before 1.0"

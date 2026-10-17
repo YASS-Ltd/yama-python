@@ -50,3 +50,26 @@ def test_live_guard_allows_other_servers(monkeypatch: pytest.MonkeyPatch, url: s
         },
     )
     assert not is_production(url)
+
+
+def test_live_guard_refuses_an_ipv4_mapped_ipv6_address_of_production(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mapped = "::ffff:192.0.2.10"
+    fake_dns(monkeypatch, {"app.yamasystems.com": "192.0.2.10", mapped: mapped})
+    assert is_production(f"https://[{mapped}]")
+
+
+@pytest.mark.parametrize("url", ["https://192.0.2.10", "https://alias.example"])
+def test_live_guard_refuses_when_production_does_not_resolve(
+    monkeypatch: pytest.MonkeyPatch, url: str
+) -> None:
+    fake_dns(monkeypatch, {"192.0.2.10": "192.0.2.10", "alias.example": "192.0.2.10"})
+    assert is_production(url)
+
+
+def test_live_guard_allows_localhost_when_production_does_not_resolve(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_dns(monkeypatch, {"localhost": "127.0.0.1"})
+    assert not is_production("http://localhost:8000")

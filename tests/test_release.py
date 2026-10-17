@@ -108,3 +108,8 @@ def test_add_section_to_the_first_release() -> None:
 def test_bullets_read_tags_in_any_case() -> None:
     body = "## Changelog\n\n- [added] Async client\n- [SECURITY] Safer errors\n"
     assert bullets(body) == [("Added", "Async client"), ("Security", "Safer errors")]
+
+
+@pytest.mark.parametrize("text", ["breaking: renamed x", "BREAKING: renamed x"])
+def test_next_version_reads_breaking_in_any_case(text: str) -> None:
+    assert next_version("1.2.3", [("Changed", text)])[0] == "2.0.0"
