@@ -51,7 +51,8 @@ def is_local(url: str) -> bool:
 def client() -> Iterator[Yama]:
     if not is_local(BASE_URL):
         pytest.fail("Live tests only run against a local server: localhost, 127.0.0.1 or ::1.")
-    with Yama(base_url=BASE_URL) as c:
+    # No proxy from the environment, which would resolve "localhost" on another machine.
+    with httpx.Client(trust_env=False) as http, Yama(base_url=BASE_URL, http_client=http) as c:
         yield c
 
 
