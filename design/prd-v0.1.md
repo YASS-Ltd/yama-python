@@ -44,6 +44,7 @@ Written in [EARS](https://alistairmavin.com/ears/) form: each is one testable se
 - **CFG-4** The client shall apply `timeout` as httpx does: a number of seconds (default 30) limits each phase of a request attempt (connecting, writing, reading, waiting for a pooled connection), and an `httpx.Timeout` sets the phases individually. `None` is rejected with `TypeError`; `httpx.Timeout(None)` turns timeouts off.
 - **CFG-5** Where the caller provides an `httpx.Client`, the client shall send every request through it with its own base URL, timeout and headers applied per request, sending its own `Authorization` header whatever `auth` the provided client has, and shall leave closing it to the caller. If it is not an `httpx.Client`, such as an `httpx.AsyncClient`, then the client shall raise `TypeError` when constructed.
 - **CFG-6** When the caller calls `with_options()` with a `timeout` or `max_retries`, the client shall return a copy that uses them and shares the original's connections, API key and base URL, leaving the original unchanged and open when the copy is closed.
+- **CFG-7** If the base URL is not `https://` with a host, or `http://` with the host `localhost`, `127.0.0.1` or `::1`, then the client shall raise `ValueError` when constructed, without sending a request. With a plain `http://` base URL, the `httpx.Client` the client creates shall ignore proxies set in the environment. Together these keep the API key from travelling in cleartext beyond the local machine; a provided `httpx.Client`'s proxies are the caller's own.
 
 ### Requests (HTTP)
 
