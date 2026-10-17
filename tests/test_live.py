@@ -7,6 +7,7 @@ the code opens a real door while it exists.
 
 import os
 import random
+import socket
 from collections.abc import Iterator
 from urllib.parse import urlsplit
 from uuid import uuid4
@@ -36,9 +37,24 @@ pytestmark = [
 ]
 
 
+def _addresses(host: str) -> set[str]:
+    try:
+        return {str(info[4][0]) for info in socket.getaddrinfo(host, 443)}
+    except (socket.gaierror, UnicodeError):
+        return set()
+
+
+def is_production(url: str) -> bool:
+    """Whether `url` is production by name, or by any address its host shares with production,
+    which catches a trailing dot, an IP address or another alias."""
+    host = (urlsplit(url).hostname or "").rstrip(".")
+    production = urlsplit(DEFAULT_BASE_URL).hostname or ""
+    return host == production or bool(_addresses(host) & _addresses(production))
+
+
 @pytest.fixture(scope="module")
 def client() -> Iterator[Yama]:
-    if urlsplit(BASE_URL).hostname == urlsplit(DEFAULT_BASE_URL).hostname:
+    if is_production(BASE_URL):
         pytest.fail("Live tests never run against production.")
     with Yama(base_url=BASE_URL) as c:
         yield c

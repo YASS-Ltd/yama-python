@@ -38,8 +38,9 @@ def bullets(body: str) -> list[Bullet]:
     found = []
     for item in items:
         tag = re.match(r"\[(\w+)\]\s*", item)
-        if tag and tag.group(1) in TAGS:
-            found.append((tag.group(1), item[tag.end() :]))
+        name = tag and next((t for t in TAGS if t.lower() == tag.group(1).lower()), None)
+        if tag and name:
+            found.append((name, item[tag.end() :]))
         else:
             found.append(("Changed", item))
     return [

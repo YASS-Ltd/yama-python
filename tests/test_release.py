@@ -103,3 +103,8 @@ def test_add_section_to_the_first_release() -> None:
     assert add_section(first, "0.1.0", date(2026, 10, 16), "- New\n") == (
         "# Changelog\n\n## Unreleased\n\n## 0.1.0 - 2026-10-16\n\n- New\n"
     )
+
+
+def test_bullets_read_tags_in_any_case() -> None:
+    body = "## Changelog\n\n- [added] Async client\n- [SECURITY] Safer errors\n"
+    assert bullets(body) == [("Added", "Async client"), ("Security", "Safer errors")]
