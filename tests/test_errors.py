@@ -1,4 +1,5 @@
 import pickle
+from collections.abc import Callable
 
 import httpx
 import pytest
@@ -216,3 +217,24 @@ def test_err_1_raises_the_status_error_when_the_callers_client_raises_for_status
     with pytest.raises(NotFoundError) as caught:
         client._request("GET", "codes/")
     assert caught.value.detail == detail
+
+
+def raise_for_another_response(response: httpx.Response) -> None:
+    other = httpx.Response(503, request=httpx.Request("GET", "https://metrics.example/"))
+    other.raise_for_status()
+
+
+def raise_even_on_success(response: httpx.Response) -> None:
+    raise httpx.HTTPStatusError("Unwanted.", request=response.request, response=response)
+
+
+@pytest.mark.parametrize("hook", [raise_for_another_response, raise_even_on_success])
+def test_err_4_reports_a_hook_that_raises_for_anything_else_as_a_connection_error(
+    hook: Callable[[httpx.Response], None],
+) -> None:
+    handler, requests = recorder(respond(201, {"uuid": "x"}))
+    hooked = httpx.Client(transport=httpx.MockTransport(handler), event_hooks={"response": [hook]})
+    client = Yama("test-key", http_client=hooked)
+    with pytest.raises(APIConnectionError):
+        client._request("POST", "codes/", json={}, headers={"Idempotency-Key": "k"})
+    assert len(requests) == 1

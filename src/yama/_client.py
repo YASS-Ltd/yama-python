@@ -15,7 +15,7 @@ import time
 from collections.abc import Callable, Iterator, Mapping
 from importlib.metadata import version
 from types import TracebackType
-from typing import Any
+from typing import Any, TypeGuard
 
 import httpx
 
@@ -174,6 +174,17 @@ def _success(request: httpx.Request, response: httpx.Response) -> Any:
         raise YamaError(
             f"Invalid JSON in the response to {request.method} {request.url.path}."
         ) from None
+
+
+def _raised_for(exc: httpx.HTTPError, request: httpx.Request) -> TypeGuard[httpx.HTTPStatusError]:
+    """Whether a hook on the caller's client raised `exc` for `request`'s error status, so the
+    response can be read as the API's answer (ERR-1). Anything else a hook raises, such as an
+    error for a side request it made, is a failed attempt."""
+    return (
+        isinstance(exc, httpx.HTTPStatusError)
+        and exc.response.request is request
+        and not exc.response.is_success
+    )
 
 
 def _connection_error(request: httpx.Request, exc: httpx.HTTPError) -> APIConnectionError:
@@ -365,12 +376,13 @@ class Yama:
             response: httpx.Response | None = None
             try:
                 response = self._http.send(request)
-            except httpx.HTTPStatusError as exc:  # raised by a hook on the caller's client
-                response = exc.response
             except httpx.HTTPError as exc:
-                result: httpx.Response | httpx.HTTPError = exc
-                error: YamaError = _connection_error(request, exc)
-                outcome = type(exc).__name__
+                if _raised_for(exc, request):
+                    response = exc.response
+                else:
+                    result: httpx.Response | httpx.HTTPError = exc
+                    error: YamaError = _connection_error(request, exc)
+                    outcome = type(exc).__name__
             if response is not None:
                 result = response
                 outcome = str(response.status_code)

@@ -24,7 +24,7 @@ def parse(model: type[T], data: object) -> T:
         return model.model_validate(data)
     except ValidationError as exc:
         # Name the fields and what's wrong, never their values (SEC-2): no `from exc`, whose
-        # errors hold the input, and the raise is outside the `except` so nothing is chained.
+        # errors hold the input, and the raise is outside the `except` so it isn't chained.
         problems = "; ".join(
             f"{'.'.join(map(str, e['loc'])) or 'response'}: {e['type']}" for e in exc.errors()
         )
