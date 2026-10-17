@@ -9,6 +9,7 @@ dist/
 .venv/
 .env
 .env.*
+.envrc
 
 # Tooling caches
 .mypy_cache/
@@ -26,3 +27,7 @@ site/
 .idea/
 .vscode/
 .DS_Store
+
+# Claude Code: worktrees for parallel agents, and personal settings
+.claude/worktrees/
+.claude/settings.local.json

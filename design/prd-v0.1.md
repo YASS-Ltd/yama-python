@@ -42,7 +42,7 @@ Written in [EARS](https://alistairmavin.com/ears/) form: each is one testable se
 - **CFG-2** If the caller passes `api_key` as `None` or an empty string, or omits it while `YAMA_API_KEY` is unset or empty, then the client shall raise `YamaError` when constructed, without sending a request.
 - **CFG-3** The client shall send requests to the `base_url` argument, or else `YAMA_API_BASE_URL`, or else `https://app.yamasystems.com`.
 - **CFG-4** The client shall apply `timeout` as httpx does: a number of seconds (default 30) limits each phase of a request attempt (connecting, writing, reading, waiting for a pooled connection), and an `httpx.Timeout` sets the phases individually. `None` is rejected with `TypeError`; `httpx.Timeout(None)` turns timeouts off.
-- **CFG-5** Where the caller provides an `httpx.Client`, the client shall send every request through it with its own base URL, timeout and headers applied per request, and shall leave closing it to the caller. If it is not an `httpx.Client`, such as an `httpx.AsyncClient`, then the client shall raise `TypeError` when constructed.
+- **CFG-5** Where the caller provides an `httpx.Client`, the client shall send every request through it with its own base URL, timeout and headers applied per request, sending its own `Authorization` header whatever `auth` the provided client has, and shall leave closing it to the caller. If it is not an `httpx.Client`, such as an `httpx.AsyncClient`, then the client shall raise `TypeError` when constructed.
 - **CFG-6** When the caller calls `with_options()` with a `timeout` or `max_retries`, the client shall return a copy that uses them and shares the original's connections, API key and base URL, leaving the original unchanged and open when the copy is closed.
 
 ### Requests (HTTP)
@@ -54,7 +54,7 @@ Written in [EARS](https://alistairmavin.com/ears/) form: each is one testable se
 
 ### Errors (ERR)
 
-- **ERR-1** When the API returns a non-2xx status, the client shall raise the `APIStatusError` subclass for that status (or `APIStatusError` itself for a status without one), carrying the status code, the body's `detail`, the parsed body, the `API-Version` header, and the request's method and path (never its query string).
+- **ERR-1** When the API returns a non-2xx status, the client shall raise the `APIStatusError` subclass for that status (or `APIStatusError` itself for a status without one), carrying the status code, the body's `detail`, the parsed body, the `API-Version` header, and the request's method and path (never its query string). Where a response hook on a provided `httpx.Client` raises `httpx.HTTPStatusError` for that response, the error is the same, but its `detail` is the reason phrase and its body None, since httpx closes the response unread.
 - **ERR-2** When the API returns 400, the client shall expose its map of keys to messages on the error. Keys name body fields or query parameters, and may include keys that aren't fields at all, such as `non_field_errors`.
 - **ERR-3** If a request still fails at the network level after its retries, then the client shall raise `APIConnectionError`, or its subclass `APITimeoutError` when the last attempt timed out.
 - **ERR-4** The client shall raise only `YamaError` subclasses for failed calls, and `TypeError` or `ValueError` for invalid arguments. Using a closed client is a programming error, and raises `ValueError`.
@@ -64,6 +64,7 @@ Written in [EARS](https://alistairmavin.com/ears/) form: each is one testable se
 ### Security (SEC)
 
 - **SEC-1** The client shall keep the API key out of every `repr`, exception message, log record and URL.
+- **SEC-2** If a response doesn't fit its model, then the client shall raise `YamaError` naming each field that failed and why, without the response's values in the error or in any exception chained to it.
 
 ### Logging (LOG)
 
