@@ -266,12 +266,10 @@ def test_cfg_7_rejects_http_for_other_hosts_without_the_key_in_the_error(
 
 @pytest.mark.parametrize(("base_url", "proxied"), [("http://localhost:8000", False), (None, True)])
 def test_cfg_7_keeps_plain_http_off_environment_proxies(
-    monkeypatch: pytest.MonkeyPatch, base_url: str | None, proxied: bool
+    base_url: str | None, proxied: bool
 ) -> None:
-    monkeypatch.setenv("HTTP_PROXY", "http://proxy.example:3128")
-    monkeypatch.setenv("HTTPS_PROXY", "http://proxy.example:3128")
-    client = Yama(KEY, base_url=base_url)
-    assert client._http.trust_env is proxied
+    with Yama(KEY, base_url=base_url) as client:
+        assert client._http.trust_env is proxied
 
 
 def test_err_4_raises_value_error_when_the_client_is_closed() -> None:
