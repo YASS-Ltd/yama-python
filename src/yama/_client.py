@@ -16,7 +16,6 @@ from collections.abc import Callable, Iterator, Mapping
 from importlib.metadata import version
 from types import TracebackType
 from typing import Any
-from urllib.parse import urlsplit
 
 import httpx
 
@@ -40,7 +39,7 @@ from yama._resources import ApiKeyResource, Buildings, Calls, Codes, Contacts, U
 
 DEFAULT_BASE_URL = "https://app.yamasystems.com"
 """Where the client sends requests unless `base_url` or `YAMA_API_BASE_URL` says otherwise."""
-_LOCAL_HOSTS = {"localhost", "localhost.", "127.0.0.1", "::1"}
+_LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1"}
 
 _PYTHON = f"{sys.version_info[0]}.{sys.version_info[1]}"
 _USER_AGENT = f"yama-python/{version('yama-client')} python/{_PYTHON}"
@@ -252,10 +251,13 @@ class Yama:
         if not all("!" <= char <= "~" for char in api_key):
             raise ValueError("api_key must be printable ASCII without spaces.")
         base_url = base_url or os.environ.get("YAMA_API_BASE_URL") or DEFAULT_BASE_URL
-        if not base_url.startswith(("https://", "http://")):
-            raise ValueError("base_url must start with https:// or http://.")
-        if base_url.startswith("http://") and urlsplit(base_url).hostname not in _LOCAL_HOSTS:
-            raise ValueError("base_url must use https:// unless the host is localhost.")
+        # Parsed as requests will be, so the check and the requests can't disagree.
+        scheme, host, _ = _origin(base_url) or ("", "", None)
+        plain = scheme == "http" and host in _LOCAL_HOSTS
+        if not ((scheme == "https" and host) or plain):
+            raise ValueError(
+                "base_url must start with https://, or http:// for localhost, 127.0.0.1 or ::1."
+            )
         if http_client is not None and not isinstance(http_client, httpx.Client):
             raise TypeError("http_client must be an httpx.Client: the client isn't async yet.")
 
@@ -265,7 +267,8 @@ class Yama:
         self._max_retries = _check_max_retries(max_retries)
         self._owns_http = http_client is None
         self._closed = False
-        self._http = http_client or httpx.Client()
+        # Plain http stays on this machine: no proxy from the environment carries it (CFG-7).
+        self._http = http_client or httpx.Client(trust_env=not plain)
         self._sleep: Callable[[float], None] = time.sleep
         self._attach()
 

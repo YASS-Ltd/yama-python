@@ -197,7 +197,8 @@ def test_cfg_6_closing_the_copy_leaves_the_original_open() -> None:
     "base_url",
     [
         "http://localhost:8000",
-        "http://LOCALHOST.:8000/",
+        "http://LOCALHOST:8000/",
+        "HTTPS://app.yamasystems.com",
         "http://127.0.0.1:8000",
         "http://[::1]:8000",
         "https://app.yamasystems.com",
@@ -219,15 +220,31 @@ def test_cfg_7_accepts_https_for_any_host_and_http_for_localhost(base_url: str) 
         "http://127.0.0.2",
         "http://10.0.0.5:8000",
         "http://",
+        "http://localhost.:8000",
+        "http://localhost:abc",
+        "http://evil.example\t@localhost",
+        "http://[::1",
+        "ftp://localhost",
     ],
 )
+@pytest.mark.parametrize("from_env", [False, True])
 def test_cfg_7_rejects_http_for_other_hosts_without_the_key_in_the_error(
-    monkeypatch: pytest.MonkeyPatch, base_url: str
+    monkeypatch: pytest.MonkeyPatch, base_url: str, from_env: bool
 ) -> None:
     monkeypatch.setenv("YAMA_API_BASE_URL", base_url)
-    with pytest.raises(ValueError, match="https://") as caught:
-        Yama(KEY)
+    with pytest.raises(ValueError, match="https://, or http:// for localhost") as caught:
+        Yama(KEY) if from_env else Yama(KEY, base_url=base_url)
     assert KEY not in str(caught.value)
+
+
+@pytest.mark.parametrize(("base_url", "proxied"), [("http://localhost:8000", False), (None, True)])
+def test_cfg_7_keeps_plain_http_off_environment_proxies(
+    monkeypatch: pytest.MonkeyPatch, base_url: str | None, proxied: bool
+) -> None:
+    monkeypatch.setenv("HTTP_PROXY", "http://proxy.example:3128")
+    monkeypatch.setenv("HTTPS_PROXY", "http://proxy.example:3128")
+    client = Yama(KEY, base_url=base_url)
+    assert client._http.trust_env is proxied
 
 
 def test_err_4_raises_value_error_when_the_client_is_closed() -> None:
