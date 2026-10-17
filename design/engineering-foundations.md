@@ -104,6 +104,14 @@ A separate daily job runs `just schema-diff` and fails when the published schema
 
 Branches: feature branches off `main`, squash-merged through PRs with `Closes #<n>`. `main` is always releasable.
 
+Every PR is reviewed before it's merged, and the bar is quality, not speed. Before opening a PR, and after each later push of new code:
+
+1. Run `/simplify` on the change. It edits the code, so it runs before the reviews see it.
+2. Then run `/code-review high`, and `/security-review` for any change touching the API key, URLs, retries, CI or releasing. Run each in a fresh agent with its own git worktree, so the reviewer doesn't share the author's context.
+3. Check each finding against the code, then fix it, with a test where it's a bug, or answer it in the PR with the reason. Repeat until a round finds nothing new, for at most three rounds; then list what's left in the PR.
+
+Agents run git only inside their own worktree and stage files by name, never with `git add -A`. A docs-only PR needs only step 1. The maintainer still reads and approves every PR.
+
 ## Release Process
 
 - **Versioning:** SemVer, independent of the app's CalVer releases. Before 1.0, minor versions may break the interface, and every break is called out in the changelog. From 1.0, breaks need a major version.
