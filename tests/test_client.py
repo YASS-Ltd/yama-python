@@ -252,13 +252,18 @@ def test_cfg_7_accepts_https_for_any_host_and_http_for_localhost(base_url: str) 
         "http://evil.example\t@localhost",
         "http://[::1",
         "ftp://localhost",
+        "https://",
+        "https://xn--a-",
     ],
 )
 @pytest.mark.parametrize("from_env", [False, True])
 def test_cfg_7_rejects_http_for_other_hosts_without_the_key_in_the_error(
     monkeypatch: pytest.MonkeyPatch, base_url: str, from_env: bool
 ) -> None:
-    monkeypatch.setenv("YAMA_API_BASE_URL", base_url)
+    if from_env:
+        monkeypatch.setenv("YAMA_API_BASE_URL", base_url)
+    else:
+        monkeypatch.delenv("YAMA_API_BASE_URL", raising=False)
     with pytest.raises(ValueError, match="https://, or http:// for localhost") as caught:
         Yama(KEY) if from_env else Yama(KEY, base_url=base_url)
     assert KEY not in str(caught.value)

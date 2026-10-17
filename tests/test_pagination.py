@@ -35,6 +35,7 @@ def test_pag_1_yields_every_item_on_every_page_following_next() -> None:
         "https://elsewhere.example/api/v2/codes/?offset=2",
         "https://app.yamasystems.com:8443/api/v2/codes/?offset=2",
         "https://app.yamasystems.com:port/api/v2/codes/?offset=2",
+        "https://xn--a-/api/v2/codes/?offset=2",
     ],
 )
 def test_pag_1_follows_next_only_on_the_configured_base_url(next_url: str) -> None:

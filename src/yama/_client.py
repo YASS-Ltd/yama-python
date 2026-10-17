@@ -204,9 +204,9 @@ def _origin(url: str) -> tuple[str, str, int | None] | None:
     """A URL's scheme, host and port, or None when it isn't a valid URL."""
     try:
         parsed = httpx.URL(url)
-    except httpx.InvalidURL:
+        return parsed.scheme, parsed.host, parsed.port
+    except (httpx.InvalidURL, ValueError):  # ValueError: malformed IDNA, such as "xn--a-"
         return None
-    return parsed.scheme, parsed.host, parsed.port
 
 
 def _log(level: int, message: str, request: httpx.Request, **facts: object) -> None:
@@ -239,7 +239,7 @@ class Yama:
             `httpx.Timeout`, `max_retries` isn't an int, or `http_client` isn't an
             `httpx.Client`.
         ValueError: The API key isn't printable ASCII without spaces, once stripped,
-            `base_url` doesn't start with `https://`, or `http://` for `localhost`,
+            `base_url` isn't `https://` with a host, or `http://` for `localhost`,
             `127.0.0.1` or `::1`, or `max_retries` is negative.
     """
 
