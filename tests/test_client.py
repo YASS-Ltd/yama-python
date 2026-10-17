@@ -290,6 +290,21 @@ def test_sec_1_chains_no_httpx_error_holding_the_request(failure: Exception) -> 
     assert caught.value.__context__ is None
 
 
+def test_sec_2_keeps_response_values_out_of_an_unreadable_response_error() -> None:
+    uuid = "dd1053d5-0a4b-4c0d-a619-6a1457d97de6"
+    body = {"uuid": uuid, "unit": uuid, "code": 98765, "expires_at": "soon-31337"}
+    client, _ = make_client(recorder(respond(body=body))[0])
+    with pytest.raises(YamaError) as caught:
+        client.codes.get(uuid)
+    error = caught.value
+    assert error.__cause__ is None
+    assert error.__context__ is None
+    assert "code" in str(error)
+    assert "expires_at" in str(error)
+    texts = [str(error), repr(error), repr(vars(error)), repr(error.args)]
+    assert not [text for text in texts if "98765" in text or "31337" in text]
+
+
 # Package
 
 

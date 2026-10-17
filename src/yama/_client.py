@@ -69,7 +69,7 @@ def _backoff(attempt: int) -> float:
 
 def _retry_after(response: httpx.Response) -> int | None:
     value = response.headers.get("Retry-After", "")
-    return int(value) if value.isdigit() else None
+    return int(value) if value.isascii() and value.isdigit() else None
 
 
 def _retry_wait(

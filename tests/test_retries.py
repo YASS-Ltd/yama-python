@@ -119,6 +119,15 @@ def test_rty_4_backs_off_when_a_429_has_no_retry_after() -> None:
     assert 0 <= sleeps[0] <= 0.5
 
 
+@pytest.mark.parametrize("value", [b"\xb2", b"7.5", b"-1", b"soon"])
+def test_rty_4_backs_off_when_retry_after_is_not_whole_ascii_seconds(value: bytes) -> None:
+    throttled = httpx.Response(429, json={}, headers=[(b"Retry-After", value)])
+    handler, _ = recorder(throttled, respond())
+    client, sleeps = make_client(handler)
+    client._request("GET", "codes/")
+    assert 0 <= sleeps[0] <= 0.5
+
+
 @pytest.mark.parametrize("status", [400, 401, 403, 404, 405, 409, 415, 422])
 def test_rty_5_does_not_retry_other_4xx(status: int) -> None:
     handler, requests = recorder(respond(status, {"detail": "No."}))

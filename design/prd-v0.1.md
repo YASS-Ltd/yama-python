@@ -64,6 +64,7 @@ Written in [EARS](https://alistairmavin.com/ears/) form: each is one testable se
 ### Security (SEC)
 
 - **SEC-1** The client shall keep the API key out of every `repr`, exception message, log record and URL.
+- **SEC-2** If a response doesn't fit its model, then the client shall raise `YamaError` naming each field that failed and why, without the response's values in the error or in any exception chained to it.
 
 ### Logging (LOG)
 
