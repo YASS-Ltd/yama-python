@@ -28,7 +28,7 @@ print(key_details.unit_access.type)  # all, buildings or units
 | Argument | Default | Meaning |
 |---|---|---|
 | `api_key` | `YAMA_API_KEY` | The API key. |
-| `base_url` | `YAMA_API_BASE_URL`, else [`DEFAULT_BASE_URL`][yama.DEFAULT_BASE_URL] | Where requests go. |
+| `base_url` | `YAMA_API_BASE_URL`, else [`DEFAULT_BASE_URL`][yama.DEFAULT_BASE_URL] | Where requests go. It must use `https://`; plain `http://` is accepted only for `localhost`, `127.0.0.1` or `::1`, such as a local development server, so your API key is never sent unencrypted over a network. |
 | `timeout` | `30.0` | Seconds allowed for each phase of an attempt: connecting, writing, reading, and waiting for a pooled connection. Pass an `httpx.Timeout` to set the phases one by one, or `httpx.Timeout(None)` for no limit. |
 | `max_retries` | `2` | Retries after a 429, a 5xx or a network error. See [Errors and retries](errors.md). |
 | `http_client` | a new `httpx.Client` | Your own client to send through. It must be an `httpx.Client`: the client isn't async yet (see [Async code](web-apps-and-jobs.md#async-code)). |

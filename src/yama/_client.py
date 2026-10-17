@@ -16,6 +16,7 @@ from collections.abc import Callable, Iterator, Mapping
 from importlib.metadata import version
 from types import TracebackType
 from typing import Any
+from urllib.parse import urlsplit
 
 import httpx
 
@@ -39,6 +40,7 @@ from yama._resources import ApiKeyResource, Buildings, Calls, Codes, Contacts, U
 
 DEFAULT_BASE_URL = "https://app.yamasystems.com"
 """Where the client sends requests unless `base_url` or `YAMA_API_BASE_URL` says otherwise."""
+_LOCAL_HOSTS = {"localhost", "localhost.", "127.0.0.1", "::1"}
 
 _PYTHON = f"{sys.version_info[0]}.{sys.version_info[1]}"
 _USER_AGENT = f"yama-python/{version('yama-client')} python/{_PYTHON}"
@@ -214,8 +216,8 @@ class Yama:
             `httpx.Timeout`, `max_retries` isn't an int, or `http_client` isn't an
             `httpx.Client`.
         ValueError: The API key isn't printable ASCII without spaces, once stripped,
-            `base_url` doesn't start with `https://` or `http://`, or `max_retries` is
-            negative.
+            `base_url` doesn't start with `https://`, or `http://` for `localhost`,
+            `127.0.0.1` or `::1`, or `max_retries` is negative.
     """
 
     api_key: ApiKeyResource
@@ -252,6 +254,8 @@ class Yama:
         base_url = base_url or os.environ.get("YAMA_API_BASE_URL") or DEFAULT_BASE_URL
         if not base_url.startswith(("https://", "http://")):
             raise ValueError("base_url must start with https:// or http://.")
+        if base_url.startswith("http://") and urlsplit(base_url).hostname not in _LOCAL_HOSTS:
+            raise ValueError("base_url must use https:// unless the host is localhost.")
         if http_client is not None and not isinstance(http_client, httpx.Client):
             raise TypeError("http_client must be an httpx.Client: the client isn't async yet.")
 

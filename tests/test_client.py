@@ -193,6 +193,43 @@ def test_cfg_6_closing_the_copy_leaves_the_original_open() -> None:
         fast_after_close._request("GET", "api-key/")
 
 
+@pytest.mark.parametrize(
+    "base_url",
+    [
+        "http://localhost:8000",
+        "http://LOCALHOST.:8000/",
+        "http://127.0.0.1:8000",
+        "http://[::1]:8000",
+        "https://app.yamasystems.com",
+        "https://staging.example",
+    ],
+)
+def test_cfg_7_accepts_https_for_any_host_and_http_for_localhost(base_url: str) -> None:
+    handler, requests = recorder(respond())
+    client, _ = make_client(handler, base_url=base_url)
+    client._request("GET", "api-key/")
+    assert len(requests) == 1
+
+
+@pytest.mark.parametrize(
+    "base_url",
+    [
+        "http://app.yamasystems.com",
+        "http://localhost.example",
+        "http://127.0.0.2",
+        "http://10.0.0.5:8000",
+        "http://",
+    ],
+)
+def test_cfg_7_rejects_http_for_other_hosts_without_the_key_in_the_error(
+    monkeypatch: pytest.MonkeyPatch, base_url: str
+) -> None:
+    monkeypatch.setenv("YAMA_API_BASE_URL", base_url)
+    with pytest.raises(ValueError, match="https://") as caught:
+        Yama(KEY)
+    assert KEY not in str(caught.value)
+
+
 def test_err_4_raises_value_error_when_the_client_is_closed() -> None:
     handler, requests = recorder(respond())
     own = Yama(KEY)
