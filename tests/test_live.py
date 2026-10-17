@@ -1,22 +1,20 @@
-"""The scenario against a real Yama API: `just test-live <base-url>`, with `YAMA_API_KEY` set.
+"""The scenario against a local Yama API: `just test-live <base-url>`, with `YAMA_API_KEY` set.
 
-Skipped unless both are given, and never run in CI. Read-only unless `YAMA_LIVE_WRITE=1`, which
-creates one access code on the first unit and deletes it again. Never set it against production:
-the code opens a real door while it exists.
+Skipped unless both are given, and never run in CI. Only a server on this machine is accepted
+(a django-poc checkout with seed data), so the tests can't reach production or a shared server.
+Read-only unless `YAMA_LIVE_WRITE=1`, which creates one access code on the first unit and deletes
+it again.
 """
 
 import os
 import random
-import socket
 from collections.abc import Iterator
-from ipaddress import IPv4Address, IPv6Address, ip_address
-from urllib.parse import urlsplit
 from uuid import uuid4
 
+import httpx
 import pytest
 
 from yama import (
-    DEFAULT_BASE_URL,
     AccessCodeCreate,
     AuthenticationError,
     BadRequestError,
@@ -38,39 +36,21 @@ pytestmark = [
 ]
 
 
-def _addresses(host: str) -> set[IPv4Address | IPv6Address]:
-    """The addresses `host` resolves to, with IPv4-mapped IPv6 ones as IPv4."""
+LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1"}
+
+
+def is_local(url: str) -> bool:
+    """Whether `url` is a server on this machine, parsed as the client parses it."""
     try:
-        infos = socket.getaddrinfo(host, 443)
-    except (socket.gaierror, UnicodeError):
-        return set()
-    found: set[IPv4Address | IPv6Address] = set()
-    for info in infos:
-        address = ip_address(str(info[4][0]).split("%")[0])
-        mapped = address.ipv4_mapped if isinstance(address, IPv6Address) else None
-        found.add(mapped or address)
-    return found
-
-
-def is_production(url: str) -> bool:
-    """Whether `url` is production by name, or by any address its host shares with production,
-    which catches a trailing dot, an IP address or another alias. When production's name
-    doesn't resolve, only a host on this machine counts as safe."""
-    host = (urlsplit(url).hostname or "").rstrip(".")
-    production = urlsplit(DEFAULT_BASE_URL).hostname or ""
-    if host == production:
-        return True
-    ours = _addresses(host)
-    if ours and all(address.is_loopback for address in ours):
+        return httpx.URL(url).host in LOCAL_HOSTS
+    except httpx.InvalidURL:
         return False
-    theirs = _addresses(production)
-    return not theirs or bool(ours & theirs)
 
 
 @pytest.fixture(scope="module")
 def client() -> Iterator[Yama]:
-    if is_production(BASE_URL):
-        pytest.fail("Live tests never run against production.")
+    if not is_local(BASE_URL):
+        pytest.fail("Live tests only run against a local server: localhost, 127.0.0.1 or ::1.")
     with Yama(base_url=BASE_URL) as c:
         yield c
 
