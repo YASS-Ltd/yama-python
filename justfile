@@ -70,10 +70,10 @@ schema-diff:
 schema-pull:
     curl -fsS {{schema_url}} -o {{schema_file}}
 
-# Read-only unless YAMA_LIVE_WRITE=1, which briefly creates a real door code: never set it
-# against production.
+# Only a server on this machine (localhost, 127.0.0.1 or ::1) is accepted. Read-only unless
+# YAMA_LIVE_WRITE=1, which also creates and deletes an access code.
 [group('release')]
-[doc("Run the live tests against a non-production Yama API, with YAMA_API_KEY set")]
+[doc("Run the live tests against a local Yama API, with YAMA_API_KEY set")]
 test-live base_url="" *args:
     YAMA_LIVE_BASE_URL={{quote(base_url)}} uv run pytest -m live -rs {{args}}
 

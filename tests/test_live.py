@@ -1,20 +1,20 @@
-"""The scenario against a real Yama API: `just test-live <base-url>`, with `YAMA_API_KEY` set.
+"""The scenario against a local Yama API: `just test-live <base-url>`, with `YAMA_API_KEY` set.
 
-Skipped unless both are given, and never run in CI. Read-only unless `YAMA_LIVE_WRITE=1`, which
-creates one access code on the first unit and deletes it again. Never set it against production:
-the code opens a real door while it exists.
+Skipped unless both are given, and never run in CI. Only a server on this machine is accepted
+(a django-poc checkout with seed data), so the tests can't reach production or a shared server.
+Read-only unless `YAMA_LIVE_WRITE=1`, which creates one access code on the first unit and deletes
+it again.
 """
 
 import os
 import random
 from collections.abc import Iterator
-from urllib.parse import urlsplit
 from uuid import uuid4
 
+import httpx
 import pytest
 
 from yama import (
-    DEFAULT_BASE_URL,
     AccessCodeCreate,
     AuthenticationError,
     BadRequestError,
@@ -36,11 +36,23 @@ pytestmark = [
 ]
 
 
+LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1"}
+
+
+def is_local(url: str) -> bool:
+    """Whether `url` is a server on this machine, parsed as the client parses it."""
+    try:
+        return httpx.URL(url).host in LOCAL_HOSTS
+    except (httpx.InvalidURL, ValueError):  # ValueError: malformed IDNA, such as "xn--a-"
+        return False
+
+
 @pytest.fixture(scope="module")
 def client() -> Iterator[Yama]:
-    if urlsplit(BASE_URL).hostname == urlsplit(DEFAULT_BASE_URL).hostname:
-        pytest.fail("Live tests never run against production.")
-    with Yama(base_url=BASE_URL) as c:
+    if not is_local(BASE_URL):
+        pytest.fail("Live tests only run against a local server: localhost, 127.0.0.1 or ::1.")
+    # No proxy from the environment, which would resolve "localhost" on another machine.
+    with httpx.Client(trust_env=False) as http, Yama(base_url=BASE_URL, http_client=http) as c:
         yield c
 
 

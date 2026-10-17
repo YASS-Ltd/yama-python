@@ -103,3 +103,18 @@ def test_add_section_to_the_first_release() -> None:
     assert add_section(first, "0.1.0", date(2026, 10, 16), "- New\n") == (
         "# Changelog\n\n## Unreleased\n\n## 0.1.0 - 2026-10-16\n\n- New\n"
     )
+
+
+def test_bullets_read_tags_in_any_case() -> None:
+    body = "## Changelog\n\n- [added] Async client\n- [SECURITY] Safer errors\n"
+    assert bullets(body) == [("Added", "Async client"), ("Security", "Safer errors")]
+
+
+@pytest.mark.parametrize("text", ["breaking: renamed x", "BREAKING: renamed x"])
+def test_next_version_reads_breaking_in_any_case(text: str) -> None:
+    assert next_version("1.2.3", bullets(f"## Changelog\n\n- {text}\n"))[0] == "2.0.0"
+
+
+def test_bullets_write_a_breaking_prefix_in_its_usual_form() -> None:
+    body = "## Changelog\n\n- breaking: renamed x\n- [CHANGED] BREAKING: renamed y\n"
+    assert bullets(body) == [("Changed", "Breaking: renamed x"), ("Changed", "Breaking: renamed y")]
