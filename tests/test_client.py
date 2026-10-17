@@ -1,6 +1,7 @@
 import json
 import logging
 import sys
+from collections.abc import Generator
 from concurrent.futures import ThreadPoolExecutor
 
 import httpx
@@ -140,6 +141,32 @@ def test_cfg_5_sends_through_the_callers_client_with_its_own_settings() -> None:
     assert request.headers["User-Agent"].startswith("yama-python/")
     assert request.headers["X-Trace"] == "kept"
     assert not http.is_closed
+
+
+class _HeaderAuth(httpx.Auth):
+    def auth_flow(self, request: httpx.Request) -> Generator[httpx.Request, httpx.Response, None]:
+        request.headers["Authorization"] = "Custom other"
+        request.headers["X-Auth-Flow"] = "ran"
+        yield request
+
+
+@pytest.mark.parametrize("auth", [httpx.BasicAuth("u", "p"), _HeaderAuth()])
+def test_cfg_5_sends_its_own_authorization_whatever_auth_the_callers_client_has(
+    auth: httpx.Auth,
+) -> None:
+    handler, requests = recorder(respond())
+    http = httpx.Client(transport=httpx.MockTransport(handler), auth=auth)
+    with Yama(KEY, http_client=http) as client:
+        client._request("GET", "api-key/")
+    assert requests[0].headers["Authorization"] == f"Bearer {KEY}"
+    assert "X-Auth-Flow" not in requests[0].headers  # the custom flow didn't run at all
+
+
+def test_cfg_5_sends_the_key_when_the_base_url_has_credentials() -> None:
+    handler, requests = recorder(respond())
+    client, _ = make_client(handler, base_url="https://user:secret@api.example")
+    client._request("GET", "api-key/")
+    assert requests[0].headers["Authorization"] == f"Bearer {KEY}"
 
 
 def test_cfg_5_closes_only_its_own_connection() -> None:
@@ -342,6 +369,21 @@ def test_sec_1_chains_no_httpx_error_holding_the_request(failure: Exception) -> 
         client._request("GET", "codes/")
     assert caught.value.__cause__ is None
     assert caught.value.__context__ is None
+
+
+def test_sec_2_keeps_response_values_out_of_an_unreadable_response_error() -> None:
+    uuid = "dd1053d5-0a4b-4c0d-a619-6a1457d97de6"
+    body = {"uuid": uuid, "unit": uuid, "code": 98765, "expires_at": "soon-31337"}
+    client, _ = make_client(recorder(respond(body=body))[0])
+    with pytest.raises(YamaError) as caught:
+        client.codes.get(uuid)
+    error = caught.value
+    assert error.__cause__ is None
+    assert error.__context__ is None
+    assert "code" in str(error)
+    assert "expires_at" in str(error)
+    texts = [str(error), repr(error), repr(vars(error)), repr(error.args)]
+    assert not [text for text in texts if "98765" in text or "31337" in text]
 
 
 # Package

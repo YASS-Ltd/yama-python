@@ -15,7 +15,7 @@ import time
 from collections.abc import Callable, Iterator, Mapping
 from importlib.metadata import version
 from types import TracebackType
-from typing import Any
+from typing import Any, TypeGuard
 
 import httpx
 
@@ -35,7 +35,15 @@ from yama._errors import (
     YamaError,
 )
 from yama._pagination import T, paginate
-from yama._resources import ApiKeyResource, Buildings, Calls, Codes, Contacts, Units
+from yama._resources import (
+    ApiKeyResource,
+    Buildings,
+    Calls,
+    Codes,
+    Contacts,
+    Units,
+    printable_ascii,
+)
 
 DEFAULT_BASE_URL = "https://app.yamasystems.com"
 """Where the client sends requests unless `base_url` or `YAMA_API_BASE_URL` says otherwise."""
@@ -59,6 +67,9 @@ _ERRORS: dict[int, type[APIStatusError]] = {
 _TRANSPORT_FAILURES = (httpx.TimeoutException, httpx.NetworkError, httpx.RemoteProtocolError)
 # Of those, the ones where the request never left the client, so the API can't have run it.
 _NOT_SENT = (httpx.ConnectError, httpx.ConnectTimeout, httpx.PoolTimeout)
+# Sends each request as built, with the key. Without it, httpx applies the caller's client's
+# auth (CFG-5); and `auth=None` isn't enough, as it makes Basic auth from a base URL's userinfo.
+_NO_AUTH = httpx.Auth()
 NOT_GIVEN: Any = object()  # an argument left out, where None means something else
 _logger = logging.getLogger("yama")
 
@@ -70,7 +81,7 @@ def _backoff(attempt: int) -> float:
 
 def _retry_after(response: httpx.Response) -> int | None:
     value = response.headers.get("Retry-After", "")
-    return int(value) if value.isdigit() else None
+    return int(value) if value.isascii() and value.isdigit() else None
 
 
 def _retry_wait(
@@ -130,6 +141,8 @@ def _status_error(request: httpx.Request, response: httpx.Response) -> APIStatus
         body = response.json()
     except ValueError:
         body = response.text
+    except httpx.ResponseNotRead:  # a hook on the caller's client raised before reading it
+        body = None
     status = response.status_code
     detail = body.get("detail") if isinstance(body, dict) else None
     if not isinstance(detail, str):
@@ -165,6 +178,17 @@ def _success(request: httpx.Request, response: httpx.Response) -> Any:
         raise YamaError(
             f"Invalid JSON in the response to {request.method} {request.url.path}."
         ) from None
+
+
+def _raised_for(exc: httpx.HTTPError, request: httpx.Request) -> TypeGuard[httpx.HTTPStatusError]:
+    """Whether a hook on the caller's client raised `exc` for `request`'s error status, so the
+    response can be read as the API's answer (ERR-1). Anything else a hook raises, such as an
+    error for a side request it made, is a failed attempt."""
+    return (
+        isinstance(exc, httpx.HTTPStatusError)
+        and exc.response.request is request
+        and not exc.response.is_success
+    )
 
 
 def _connection_error(request: httpx.Request, exc: httpx.HTTPError) -> APIConnectionError:
@@ -206,8 +230,8 @@ class Yama:
             or an `httpx.Timeout` to set them one by one.
         max_retries: How many times to retry a request after a 429, a 5xx or a network error.
         http_client: Your own `httpx.Client` to send through. The client applies its own
-            URL, timeout and headers to each request, and leaves closing it to you.
-            An `httpx.AsyncClient` isn't supported.
+            URL, timeout and headers to each request, doesn't use its `auth`, and leaves
+            closing it to you. An `httpx.AsyncClient` isn't supported.
 
     Raises:
         YamaError: No API key was given.
@@ -248,7 +272,7 @@ class Yama:
         api_key = (api_key or "").strip()
         if not api_key:
             raise YamaError("No API key: pass api_key, or set YAMA_API_KEY.")
-        if not all("!" <= char <= "~" for char in api_key):
+        if not printable_ascii(api_key):
             raise ValueError("api_key must be printable ASCII without spaces.")
         base_url = base_url or os.environ.get("YAMA_API_BASE_URL") or DEFAULT_BASE_URL
         # Parsed as requests will be, so the check and the requests can't disagree.
@@ -361,12 +385,15 @@ class Yama:
             started = time.monotonic()
             response: httpx.Response | None = None
             try:
-                response = self._http.send(request)
+                response = self._http.send(request, auth=_NO_AUTH)
             except httpx.HTTPError as exc:
-                result: httpx.Response | httpx.HTTPError = exc
-                error: YamaError = _connection_error(request, exc)
-                outcome = type(exc).__name__
-            else:
+                if _raised_for(exc, request):
+                    response = exc.response
+                else:
+                    result: httpx.Response | httpx.HTTPError = exc
+                    error: YamaError = _connection_error(request, exc)
+                    outcome = type(exc).__name__
+            if response is not None:
                 result = response
                 outcome = str(response.status_code)
             _log(

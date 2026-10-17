@@ -300,7 +300,8 @@ class _FakeAPI:
             errors["uuid"] = ["This field is read-only."]
         if request.method != "PATCH":
             errors |= {k: ["This field is required."] for k in ("unit", "code") if k not in body}
-        if "unit" in body and body["unit"] not in self._data["units"]:
+        unit = body.get("unit")
+        if "unit" in body and not (isinstance(unit, str) and unit in self._data["units"]):
             errors["unit"] = ["Unit does not exist."]
         code = body.get("code", "000")
         if not (isinstance(code, str) and re.fullmatch(_CODE_PATTERN, code)):
