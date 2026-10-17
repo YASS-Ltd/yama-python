@@ -118,5 +118,6 @@ Branches: feature branches off `main`, squash-merged through PRs with `Closes #<
 ## Security
 
 - The repo is public: no keys, customer data, internal hostnames or django-poc internals in code, tests, issues or docs.
-- Dependabot keeps dependencies and GitHub Actions up to date with one grouped PR each a month, and `SECURITY.md` explains how to report a vulnerability privately.
+- Workflows pin every action to a full commit SHA, with its version in a comment, so a moved upstream tag can't change what runs with the PyPI publishing token.
+- Dependabot keeps dependencies and GitHub Actions (SHA pins included) up to date with one grouped PR each a month, and `SECURITY.md` explains how to report a vulnerability privately.
 - Release artifacts get PyPI's attestations through trusted publishing.
