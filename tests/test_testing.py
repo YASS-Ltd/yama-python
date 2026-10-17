@@ -164,6 +164,8 @@ def test_test_1_replays_a_create_with_the_same_idempotency_key(api: httpx.Client
         ({"colour": "red"}, "colour"),
         ({"uuid": MISSING}, "uuid"),
         ({"unit": MISSING}, "unit"),
+        ({"unit": []}, "unit"),
+        ({"unit": {}}, "unit"),
         ({"code": None}, "code"),
         ({"code": "12"}, "code"),
         ({"code": "١٢٣"}, "code"),

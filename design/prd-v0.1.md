@@ -54,7 +54,7 @@ Written in [EARS](https://alistairmavin.com/ears/) form: each is one testable se
 
 ### Errors (ERR)
 
-- **ERR-1** When the API returns a non-2xx status, the client shall raise the `APIStatusError` subclass for that status (or `APIStatusError` itself for a status without one), carrying the status code, the body's `detail`, the parsed body, the `API-Version` header, and the request's method and path (never its query string).
+- **ERR-1** When the API returns a non-2xx status, the client shall raise the `APIStatusError` subclass for that status (or `APIStatusError` itself for a status without one), carrying the status code, the body's `detail`, the parsed body, the `API-Version` header, and the request's method and path (never its query string). Where a response hook on a provided `httpx.Client` raises `httpx.HTTPStatusError` for that response, the error is the same, but its `detail` is the reason phrase and its body None, since httpx closes the response unread.
 - **ERR-2** When the API returns 400, the client shall expose its map of keys to messages on the error. Keys name body fields or query parameters, and may include keys that aren't fields at all, such as `non_field_errors`.
 - **ERR-3** If a request still fails at the network level after its retries, then the client shall raise `APIConnectionError`, or its subclass `APITimeoutError` when the last attempt timed out.
 - **ERR-4** The client shall raise only `YamaError` subclasses for failed calls, and `TypeError` or `ValueError` for invalid arguments. Using a closed client is a programming error, and raises `ValueError`.
@@ -64,6 +64,7 @@ Written in [EARS](https://alistairmavin.com/ears/) form: each is one testable se
 ### Security (SEC)
 
 - **SEC-1** The client shall keep the API key out of every `repr`, exception message, log record and URL.
+- **SEC-2** If a response doesn't fit its model, then the client shall raise `YamaError` naming each field that failed and why, without the response's values in the error or in any exception chained to it.
 
 ### Logging (LOG)
 

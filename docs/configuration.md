@@ -56,6 +56,8 @@ Closing the copy leaves the connections open; closing the original closes them f
 
 Pass an `httpx.Client` to configure the transport yourself: a proxy, a custom CA bundle, or event hooks. The client applies its own URL, timeout and headers to each request, and leaves closing your `httpx.Client` to you.
 
+Leave raising for status to the client. If a response hook calls `raise_for_status()`, you still get the matching error, such as `NotFoundError`, but httpx closes the response before its body is read, so the error has no `detail` from the API or field errors.
+
 ```python
 import httpx
 
