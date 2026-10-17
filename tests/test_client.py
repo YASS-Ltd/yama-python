@@ -159,7 +159,14 @@ def test_cfg_5_sends_its_own_authorization_whatever_auth_the_callers_client_has(
     with Yama(KEY, http_client=http) as client:
         client._request("GET", "api-key/")
     assert requests[0].headers["Authorization"] == f"Bearer {KEY}"
-    assert "X-Auth-Flow" not in requests[0].headers
+    assert "X-Auth-Flow" not in requests[0].headers  # the custom flow didn't run at all
+
+
+def test_cfg_5_sends_the_key_when_the_base_url_has_credentials() -> None:
+    handler, requests = recorder(respond())
+    client, _ = make_client(handler, base_url="https://user:secret@api.example")
+    client._request("GET", "api-key/")
+    assert requests[0].headers["Authorization"] == f"Bearer {KEY}"
 
 
 def test_cfg_5_closes_only_its_own_connection() -> None:

@@ -58,6 +58,9 @@ _ERRORS: dict[int, type[APIStatusError]] = {
 _TRANSPORT_FAILURES = (httpx.TimeoutException, httpx.NetworkError, httpx.RemoteProtocolError)
 # Of those, the ones where the request never left the client, so the API can't have run it.
 _NOT_SENT = (httpx.ConnectError, httpx.ConnectTimeout, httpx.PoolTimeout)
+# Sends each request as built, with the key. Without it, httpx applies the caller's client's
+# auth (CFG-5); and `auth=None` isn't enough, as it makes Basic auth from a base URL's userinfo.
+_NO_AUTH = httpx.Auth()
 NOT_GIVEN: Any = object()  # an argument left out, where None means something else
 _logger = logging.getLogger("yama")
 
@@ -354,8 +357,7 @@ class Yama:
             started = time.monotonic()
             response: httpx.Response | None = None
             try:
-                # A no-op Auth, so the caller's client's own auth can't replace the key (CFG-5).
-                response = self._http.send(request, auth=httpx.Auth())
+                response = self._http.send(request, auth=_NO_AUTH)
             except httpx.HTTPError as exc:
                 result: httpx.Response | httpx.HTTPError = exc
                 error: YamaError = _connection_error(request, exc)
