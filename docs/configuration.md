@@ -54,7 +54,7 @@ Closing the copy leaves the connections open; closing the original closes them f
 
 ## Your own httpx client
 
-Pass an `httpx.Client` to configure the transport yourself: a proxy, a custom CA bundle, or event hooks. The client applies its own URL, timeout and headers to each request, and leaves closing your `httpx.Client` to you.
+Pass an `httpx.Client` to configure the transport yourself: a proxy, a custom CA bundle, or event hooks. The client applies its own URL, timeout and headers to each request, and leaves closing your `httpx.Client` to you. Your client's `auth` isn't used for API requests: they always carry your API key.
 
 ```python
 import httpx

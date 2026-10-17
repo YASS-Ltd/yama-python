@@ -1,6 +1,7 @@
 import json
 import logging
 import sys
+from collections.abc import Generator
 from concurrent.futures import ThreadPoolExecutor
 
 import httpx
@@ -140,6 +141,25 @@ def test_cfg_5_sends_through_the_callers_client_with_its_own_settings() -> None:
     assert request.headers["User-Agent"].startswith("yama-python/")
     assert request.headers["X-Trace"] == "kept"
     assert not http.is_closed
+
+
+class _HeaderAuth(httpx.Auth):
+    def auth_flow(self, request: httpx.Request) -> Generator[httpx.Request, httpx.Response, None]:
+        request.headers["Authorization"] = "Custom other"
+        request.headers["X-Auth-Flow"] = "ran"
+        yield request
+
+
+@pytest.mark.parametrize("auth", [httpx.BasicAuth("u", "p"), _HeaderAuth()])
+def test_cfg_5_sends_its_own_authorization_whatever_auth_the_callers_client_has(
+    auth: httpx.Auth,
+) -> None:
+    handler, requests = recorder(respond())
+    http = httpx.Client(transport=httpx.MockTransport(handler), auth=auth)
+    with Yama(KEY, http_client=http) as client:
+        client._request("GET", "api-key/")
+    assert requests[0].headers["Authorization"] == f"Bearer {KEY}"
+    assert "X-Auth-Flow" not in requests[0].headers
 
 
 def test_cfg_5_closes_only_its_own_connection() -> None:

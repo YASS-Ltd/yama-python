@@ -205,8 +205,8 @@ class Yama:
             or an `httpx.Timeout` to set them one by one.
         max_retries: How many times to retry a request after a 429, a 5xx or a network error.
         http_client: Your own `httpx.Client` to send through. The client applies its own
-            URL, timeout and headers to each request, and leaves closing it to you.
-            An `httpx.AsyncClient` isn't supported.
+            URL, timeout and headers to each request, doesn't use its `auth`, and leaves
+            closing it to you. An `httpx.AsyncClient` isn't supported.
 
     Raises:
         YamaError: No API key was given.
@@ -354,7 +354,8 @@ class Yama:
             started = time.monotonic()
             response: httpx.Response | None = None
             try:
-                response = self._http.send(request)
+                # A no-op Auth, so the caller's client's own auth can't replace the key (CFG-5).
+                response = self._http.send(request, auth=httpx.Auth())
             except httpx.HTTPError as exc:
                 result: httpx.Response | httpx.HTTPError = exc
                 error: YamaError = _connection_error(request, exc)
