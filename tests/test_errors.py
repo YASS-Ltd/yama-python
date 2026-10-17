@@ -188,3 +188,31 @@ def test_err_5_survives_a_pickle_round_trip(error: YamaError) -> None:
     assert type(copy) is type(error)
     assert str(copy) == str(error)
     assert vars(copy) == vars(error)
+
+
+def raise_for_status(response: httpx.Response) -> None:
+    response.raise_for_status()
+
+
+class UnreadTransport(httpx.BaseTransport):
+    """Answers 404 with a body that is only read if the client gets that far."""
+
+    def handle_request(self, request: httpx.Request) -> httpx.Response:
+        return httpx.Response(404, stream=httpx.ByteStream(b'{"detail": "Not found."}'))
+
+
+@pytest.mark.parametrize(
+    ("transport", "detail"),
+    [
+        (httpx.MockTransport(lambda _: respond(404, {"detail": "Not found."})), "Not found."),
+        (UnreadTransport(), "Not Found"),
+    ],
+)
+def test_err_1_raises_the_status_error_when_the_callers_client_raises_for_status(
+    transport: httpx.BaseTransport, detail: str
+) -> None:
+    hooked = httpx.Client(transport=transport, event_hooks={"response": [raise_for_status]})
+    client = Yama("test-key", http_client=hooked)
+    with pytest.raises(NotFoundError) as caught:
+        client._request("GET", "codes/")
+    assert caught.value.detail == detail

@@ -35,7 +35,15 @@ from yama._errors import (
     YamaError,
 )
 from yama._pagination import T, paginate
-from yama._resources import ApiKeyResource, Buildings, Calls, Codes, Contacts, Units
+from yama._resources import (
+    ApiKeyResource,
+    Buildings,
+    Calls,
+    Codes,
+    Contacts,
+    Units,
+    printable_ascii,
+)
 
 DEFAULT_BASE_URL = "https://app.yamasystems.com"
 """Where the client sends requests unless `base_url` or `YAMA_API_BASE_URL` says otherwise."""
@@ -129,6 +137,8 @@ def _status_error(request: httpx.Request, response: httpx.Response) -> APIStatus
         body = response.json()
     except ValueError:
         body = response.text
+    except httpx.ResponseNotRead:  # a hook on the caller's client raised before reading it
+        body = None
     status = response.status_code
     detail = body.get("detail") if isinstance(body, dict) else None
     if not isinstance(detail, str):
@@ -247,7 +257,7 @@ class Yama:
         api_key = (api_key or "").strip()
         if not api_key:
             raise YamaError("No API key: pass api_key, or set YAMA_API_KEY.")
-        if not all("!" <= char <= "~" for char in api_key):
+        if not printable_ascii(api_key):
             raise ValueError("api_key must be printable ASCII without spaces.")
         base_url = base_url or os.environ.get("YAMA_API_BASE_URL") or DEFAULT_BASE_URL
         if not base_url.startswith(("https://", "http://")):
@@ -355,11 +365,13 @@ class Yama:
             response: httpx.Response | None = None
             try:
                 response = self._http.send(request)
+            except httpx.HTTPStatusError as exc:  # raised by a hook on the caller's client
+                response = exc.response
             except httpx.HTTPError as exc:
                 result: httpx.Response | httpx.HTTPError = exc
                 error: YamaError = _connection_error(request, exc)
                 outcome = type(exc).__name__
-            else:
+            if response is not None:
                 result = response
                 outcome = str(response.status_code)
             _log(

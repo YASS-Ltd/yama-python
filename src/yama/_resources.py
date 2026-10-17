@@ -31,6 +31,12 @@ if TYPE_CHECKING:
 _EARLIEST = date(2000, 1, 1)  # for an open `start`: before any call the API holds (CALL-2)
 
 
+def printable_ascii(value: str) -> bool:
+    """Whether `value` is printable ASCII without spaces, as API keys and idempotency keys
+    must be."""
+    return all("!" <= char <= "~" for char in value)
+
+
 def _uuid(value: UUID | str) -> str:
     """`value` as a canonical UUID string, so it can't change the path it goes in."""
     if isinstance(value, UUID):
@@ -181,7 +187,7 @@ class Codes(_Resource):
         if idempotency_key is not None and not isinstance(idempotency_key, str):
             raise TypeError("idempotency_key must be a str.")
         key = str(uuid4()) if idempotency_key is None else idempotency_key
-        if not 1 <= len(key) <= 255 or not all("!" <= char <= "~" for char in key):
+        if not 1 <= len(key) <= 255 or not printable_ascii(key):
             raise ValueError(
                 "idempotency_key must be 1 to 255 printable ASCII characters, without spaces."
             )
