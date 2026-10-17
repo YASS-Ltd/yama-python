@@ -23,6 +23,7 @@ def test_live_guard_allows_a_server_on_this_machine(url: str) -> None:
         "http://web:8000",
         "http://localhost@app.yamasystems.com",
         "http://localhost:abc",
+        "http://xn--localhost-",
         "",
     ],
 )

@@ -38,10 +38,10 @@ def bullets(body: str) -> list[Bullet]:
     found = []
     for item in items:
         tag = re.match(r"\[(\w+)\]\s*", item)
-        if tag and (name := tag.group(1).capitalize()) in TAGS:
-            found.append((name, item[tag.end() :]))
-        else:
-            found.append(("Changed", item))
+        name, text = ("Changed", item)
+        if tag and (named := tag.group(1).capitalize()) in TAGS:
+            name, text = named, item[tag.end() :]
+        found.append((name, re.sub(r"^breaking:", "Breaking:", text, flags=re.I)))
     return [
         (tag, text)
         for tag, text in found
@@ -52,7 +52,7 @@ def bullets(body: str) -> list[Bullet]:
 def next_version(current: str, found: list[Bullet]) -> tuple[str, str]:
     """The version after `current` that `found` calls for, and why."""
     major, minor, patch = (int(n) for n in current.split("."))
-    if any(tag == "Removed" or text.lower().startswith("breaking:") for tag, text in found):
+    if any(tag == "Removed" or text.startswith("Breaking:") for tag, text in found):
         reason = "a [Removed] or Breaking: bullet is a major bump"
         if major == 0:
             return f"0.{minor + 1}.0", reason + ", a minor one before 1.0"

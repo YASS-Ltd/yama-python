@@ -43,7 +43,7 @@ def is_local(url: str) -> bool:
     """Whether `url` is a server on this machine, parsed as the client parses it."""
     try:
         return httpx.URL(url).host in LOCAL_HOSTS
-    except httpx.InvalidURL:
+    except (httpx.InvalidURL, ValueError):  # ValueError: malformed IDNA, such as "xn--a-"
         return False
 
 

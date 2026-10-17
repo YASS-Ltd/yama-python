@@ -112,4 +112,9 @@ def test_bullets_read_tags_in_any_case() -> None:
 
 @pytest.mark.parametrize("text", ["breaking: renamed x", "BREAKING: renamed x"])
 def test_next_version_reads_breaking_in_any_case(text: str) -> None:
-    assert next_version("1.2.3", [("Changed", text)])[0] == "2.0.0"
+    assert next_version("1.2.3", bullets(f"## Changelog\n\n- {text}\n"))[0] == "2.0.0"
+
+
+def test_bullets_write_a_breaking_prefix_in_its_usual_form() -> None:
+    body = "## Changelog\n\n- breaking: renamed x\n- [CHANGED] BREAKING: renamed y\n"
+    assert bullets(body) == [("Changed", "Breaking: renamed x"), ("Changed", "Breaking: renamed y")]
