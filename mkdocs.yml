@@ -1,7 +1,7 @@
 # The docs site, built with Zensical (`just docs`). Material for MkDocs reads the same file.
 site_name: yama-python
 site_description: The official Python client for the Yama access-control API.
-site_url: https://yass-ltd.github.io/yama-python/
+site_url: https://python.yamasystems.com/
 repo_url: https://github.com/YASS-Ltd/yama-python
 repo_name: YASS-Ltd/yama-python
 copyright: Copyright &copy; Yama Access Software Systems Ltd. MIT licence.
