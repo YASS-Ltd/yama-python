@@ -282,7 +282,8 @@ class Yama:
             source = "YAMA_API_BASE_URL"
             base_url = (os.environ.get(source) or "").strip() or DEFAULT_BASE_URL
         # Parsed as requests will be, so the check and the requests can't disagree.
-        scheme, host, _ = _origin(base_url) or ("", "", None)
+        origin = _origin(base_url)
+        scheme, host, _ = origin or ("", "", None)
         plain = scheme == "http" and host in _LOCAL_HOSTS
         if not ((scheme == "https" and host) or plain):
             raise ValueError(
@@ -294,7 +295,7 @@ class Yama:
 
         self._key = api_key
         self._base_url = base_url.rstrip("/")
-        self._base_origin = _origin(self._base_url)
+        self._base_origin = origin
         self._timeout = _check_timeout(timeout)
         self._max_retries = _check_max_retries(max_retries)
         self._owns_http = http_client is None
