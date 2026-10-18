@@ -1,8 +1,10 @@
 import json
 import logging
 import sys
+import threading
 from collections.abc import Generator
 from concurrent.futures import ThreadPoolExecutor
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import httpx
 import pytest
@@ -162,10 +164,10 @@ def test_cfg_5_sends_its_own_authorization_whatever_auth_the_callers_client_has(
     assert "X-Auth-Flow" not in requests[0].headers  # the custom flow didn't run at all
 
 
-def test_cfg_5_sends_the_key_when_the_base_url_has_credentials() -> None:
+def test_cfg_5_sends_the_key_when_a_url_has_credentials() -> None:
     handler, requests = recorder(respond())
-    client, _ = make_client(handler, base_url="https://user:secret@api.example")
-    client._request("GET", "api-key/")
+    client, _ = make_client(handler)
+    client._request("GET", "https://user:secret@app.yamasystems.com/api/v2/api-key/")
     assert requests[0].headers["Authorization"] == f"Bearer {KEY}"
 
 
@@ -218,6 +220,127 @@ def test_cfg_6_closing_the_copy_leaves_the_original_open() -> None:
         fast_after_close = client.with_options(timeout=1)
     with pytest.raises(ValueError, match="client is closed"):
         fast_after_close._request("GET", "api-key/")
+
+
+@pytest.mark.parametrize(
+    "base_url",
+    [
+        "http://localhost:8000",
+        "http://LOCALHOST:8000/",
+        "HTTPS://app.yamasystems.com",
+        "http://127.0.0.1:8000",
+        "http://[::1]:8000",
+        "https://app.yamasystems.com",
+        "https://staging.example",
+    ],
+)
+def test_cfg_7_accepts_https_for_any_host_and_http_for_localhost(base_url: str) -> None:
+    handler, requests = recorder(respond())
+    client, _ = make_client(handler, base_url=base_url)
+    client._request("GET", "api-key/")
+    assert len(requests) == 1
+
+
+@pytest.mark.parametrize("from_env", [False, True])
+def test_cfg_3_strips_whitespace_around_the_base_url(
+    monkeypatch: pytest.MonkeyPatch, from_env: bool
+) -> None:
+    padded = " http://localhost:8000\r\n"
+    if from_env:
+        monkeypatch.setenv("YAMA_API_BASE_URL", padded)
+    handler, requests = recorder(respond())
+    client, _ = make_client(handler, **({} if from_env else {"base_url": padded}))
+    client._request("GET", "api-key/")
+    assert str(requests[0].url) == "http://localhost:8000/api/v2/api-key/"
+
+
+@pytest.mark.parametrize("from_env", [False, True])
+def test_cfg_3_an_empty_base_url_falls_back_and_a_whitespace_one_is_invalid(
+    monkeypatch: pytest.MonkeyPatch, from_env: bool
+) -> None:
+    if from_env:
+        monkeypatch.setenv("YAMA_API_BASE_URL", "")
+    with Yama(KEY, base_url=None if from_env else "") as client:
+        assert client._base_url == DEFAULT_BASE_URL
+    for blank in (" ", "\n"):
+        if from_env:
+            monkeypatch.setenv("YAMA_API_BASE_URL", blank)
+        with pytest.raises(ValueError, match="must be a valid https:// URL"):
+            Yama(KEY) if from_env else Yama(KEY, base_url=blank)
+
+
+def test_cfg_3_rejects_a_base_url_that_is_not_a_string() -> None:
+    with pytest.raises(TypeError, match="base_url must be a string"):
+        Yama(KEY, base_url=httpx.URL("https://app.yamasystems.com"))  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize(
+    "base_url",
+    [
+        "http://app.yamasystems.com",
+        "http://localhost.example",
+        "http://127.0.0.2",
+        "http://10.0.0.5:8000",
+        "http://",
+        "http://localhost.:8000",
+        "http://localhost:abc",
+        "http://evil.example\t@localhost",
+        "http://[::1",
+        "ftp://localhost",
+        "https://",
+        "https://xn--a-",
+        "http://localhost:8000?x=1",
+        "https://app.yamasystems.com?",
+        "https://app.yamasystems.com#top",
+        "https://user:pw@app.yamasystems.com",
+    ],
+)
+@pytest.mark.parametrize("from_env", [False, True])
+def test_cfg_7_rejects_http_for_other_hosts_without_the_key_in_the_error(
+    monkeypatch: pytest.MonkeyPatch, base_url: str, from_env: bool
+) -> None:
+    if from_env:
+        monkeypatch.setenv("YAMA_API_BASE_URL", base_url)
+    source = "YAMA_API_BASE_URL" if from_env else "base_url"
+    expected = f"^{source} must be a valid https:// URL, or http:// for localhost"
+    with pytest.raises(ValueError, match=expected) as caught:
+        Yama(KEY) if from_env else Yama(KEY, base_url=base_url)
+    assert KEY not in str(caught.value)
+
+
+@pytest.fixture
+def local_server() -> Generator[str]:
+    """A plain-http server on this machine that answers every GET with `{}`."""
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self) -> None:
+            self.send_response(200)
+            self.send_header("Content-Length", "2")
+            self.end_headers()
+            self.wfile.write(b"{}")
+
+        def log_message(self, *args: object) -> None:
+            pass
+
+    with ThreadingHTTPServer(("127.0.0.1", 0), Handler) as server:
+        thread = threading.Thread(target=server.serve_forever, kwargs={"poll_interval": 0.01})
+        thread.start()
+        yield f"http://127.0.0.1:{server.server_port}"
+        server.shutdown()
+        thread.join()
+
+
+def test_cfg_7_sends_plain_http_past_environment_proxies(
+    monkeypatch: pytest.MonkeyPatch, local_server: str
+) -> None:
+    for name in ("HTTP_PROXY", "http_proxy", "ALL_PROXY", "all_proxy"):
+        monkeypatch.setenv(name, "http://127.0.0.1:9")  # nothing listens: a proxied request fails
+    for name in ("NO_PROXY", "no_proxy"):
+        monkeypatch.delenv(name, raising=False)
+    with Yama(KEY, base_url=local_server, max_retries=0, timeout=2) as client:
+        assert client._request("GET", "api-key/") == {}
+    with Yama(KEY) as client:  # https keeps the environment's proxies
+        assert client._http.trust_env
 
 
 def test_err_4_raises_value_error_when_the_client_is_closed() -> None:
@@ -296,11 +419,17 @@ def test_sec_1_strips_whitespace_around_the_key() -> None:
 
 
 @pytest.mark.parametrize("key", [f"{KEY} x", f"{KEY}\tx", f"{KEY}\u00e9", f"{KEY}\x00"])
+@pytest.mark.parametrize("from_env", [False, True])
 def test_sec_1_rejects_a_key_that_is_not_printable_ascii_without_the_key_in_the_error(
-    key: str,
+    monkeypatch: pytest.MonkeyPatch, key: str, from_env: bool
 ) -> None:
-    with pytest.raises(ValueError) as caught:
-        Yama(key)
+    if from_env:
+        if "\x00" in key:
+            pytest.skip("an environment variable can't hold NUL")
+        monkeypatch.setenv("YAMA_API_KEY", key)
+    source = "YAMA_API_KEY" if from_env else "api_key"
+    with pytest.raises(ValueError, match=f"^{source} must be printable ASCII") as caught:
+        Yama() if from_env else Yama(key)
     assert KEY not in str(caught.value)
     assert KEY not in repr(caught.value)
 

@@ -47,6 +47,9 @@ from yama._resources import (
 
 DEFAULT_BASE_URL = "https://app.yamasystems.com"
 """Where the client sends requests unless `base_url` or `YAMA_API_BASE_URL` says otherwise."""
+# Plain http is allowed only to these (CFG-7), trusting `localhost` to resolve to this machine
+# as RFC 6761 asks and operating systems do.
+_LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1"}
 
 _PYTHON = f"{sys.version_info[0]}.{sys.version_info[1]}"
 _USER_AGENT = f"yama-python/{version('yama-client')} python/{_PYTHON}"
@@ -203,9 +206,9 @@ def _origin(url: str) -> tuple[str, str, int | None] | None:
     """A URL's scheme, host and port, or None when it isn't a valid URL."""
     try:
         parsed = httpx.URL(url)
-    except httpx.InvalidURL:
+        return parsed.scheme, parsed.host, parsed.port
+    except (httpx.InvalidURL, ValueError):  # ValueError: malformed IDNA, such as "xn--a-"
         return None
-    return parsed.scheme, parsed.host, parsed.port
 
 
 def _log(level: int, message: str, request: httpx.Request, **facts: object) -> None:
@@ -234,12 +237,13 @@ class Yama:
 
     Raises:
         YamaError: No API key was given.
-        TypeError: `api_key` isn't a string, `timeout` isn't a number of seconds or an
+        TypeError: `api_key` or `base_url` isn't a string, `timeout` isn't a number of seconds or an
             `httpx.Timeout`, `max_retries` isn't an int, or `http_client` isn't an
             `httpx.Client`.
-        ValueError: The API key isn't printable ASCII without spaces, once stripped,
-            `base_url` doesn't start with `https://` or `http://`, or `max_retries` is
-            negative.
+        ValueError: The API key isn't printable ASCII without spaces once stripped; the
+            base URL isn't a valid `https://` URL, or `http://` for `localhost`,
+            `127.0.0.1` or `[::1]`, without a query, fragment or user info; or
+            `max_retries` is negative.
     """
 
     api_key: ApiKeyResource
@@ -264,28 +268,49 @@ class Yama:
         max_retries: int = 2,
         http_client: httpx.Client | None = None,
     ) -> None:
+        key_source = "api_key"
         if api_key is NOT_GIVEN:
-            api_key = os.environ.get("YAMA_API_KEY")
+            key_source, api_key = "YAMA_API_KEY", os.environ.get("YAMA_API_KEY")
         elif api_key is not None and not isinstance(api_key, str):
             raise TypeError("api_key must be a string.")
         api_key = (api_key or "").strip()
         if not api_key:
             raise YamaError("No API key: pass api_key, or set YAMA_API_KEY.")
         if not printable_ascii(api_key):
-            raise ValueError("api_key must be printable ASCII without spaces.")
-        base_url = base_url or os.environ.get("YAMA_API_BASE_URL") or DEFAULT_BASE_URL
-        if not base_url.startswith(("https://", "http://")):
-            raise ValueError("base_url must start with https:// or http://.")
+            raise ValueError(f"{key_source} must be printable ASCII without spaces.")
+        if base_url is not None and not isinstance(base_url, str):
+            raise TypeError("base_url must be a string.")
+        source = "base_url"
+        if not base_url:
+            source = "YAMA_API_BASE_URL"
+            base_url = os.environ.get(source) or DEFAULT_BASE_URL
+        # Stripped after the fallback, so a blank setting fails rather than going to production.
+        base_url = base_url.strip()
+        # Parsed as requests will be, so the check and the requests can't disagree.
+        origin = _origin(base_url)
+        scheme, host, _ = origin or ("", "", None)
+        plain = scheme == "http" and host in _LOCAL_HOSTS
+        # By character, not parsed: httpx drops a bare trailing "?" or "#". Userinfo would be
+        # ignored (requests send `_NO_AUTH`) and shown by repr().
+        extras = any(c in base_url for c in "?#@")
+        if not ((scheme == "https" and host) or plain) or extras:
+            raise ValueError(
+                f"{source} must be a valid https:// URL, or http:// for localhost, 127.0.0.1 "
+                "or [::1], without a query, fragment or user info."
+            )
         if http_client is not None and not isinstance(http_client, httpx.Client):
             raise TypeError("http_client must be an httpx.Client: the client isn't async yet.")
 
         self._key = api_key
         self._base_url = base_url.rstrip("/")
+        self._base_origin = origin
         self._timeout = _check_timeout(timeout)
         self._max_retries = _check_max_retries(max_retries)
         self._owns_http = http_client is None
         self._closed = False
-        self._http = http_client or httpx.Client()
+        # Plain http stays on this machine: no proxy from the environment carries it (CFG-7).
+        # This also skips SSL_CERT_* (no TLS here) and .netrc (requests send `_NO_AUTH`).
+        self._http = http_client or httpx.Client(trust_env=not plain)
         self._sleep: Callable[[float], None] = time.sleep
         self._attach()
 
@@ -357,7 +382,7 @@ class Yama:
             raise ValueError("The client is closed.")
         url = path if "://" in path else f"{self._base_url}/api/v2/{path}"
         origin = _origin(url)
-        if origin is None or origin != _origin(self._base_url):
+        if origin is None or origin != self._base_origin:
             raise YamaError("Refusing to follow a URL that isn't on the configured base URL.")
         request = self._http.build_request(
             method,
