@@ -1,32 +1,39 @@
 name: Docs
 
-# Builds the docs site on every pull request and push to `main`. Publishing to GitHub Pages is
-# manual (run the workflow), so the site can't go live before the package is on PyPI.
+# Builds the docs site on every pull request and push to `main`. Publishes `main` to GitHub Pages
+# after a successful Release run, so the site can't go live before the package is on PyPI, or
+# when the workflow is run by hand. `workflow_run` runs on `main`, which the github-pages
+# environment requires; the Release run's own pull-request ref isn't allowed to deploy.
 
 on:
   pull_request:
   push:
     branches: [main]
   workflow_dispatch:
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
 
 permissions:
   contents: read
 
 jobs:
   build:
+    # Release also runs, and skips, when any other pull request closes.
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
       - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
       - run: just docs-build
-      - if: github.event_name == 'workflow_dispatch'
+      - if: github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_run'
         uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4.0.0
         with:
           path: site
 
   deploy:
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_run'
     needs: build
     runs-on: ubuntu-latest
     permissions:
