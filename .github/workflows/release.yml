@@ -2,7 +2,8 @@ name: Release
 
 # Merging a release/vX.Y.Z PR (opened by `just release`) builds that commit, publishes it to PyPI
 # through trusted publishing, then tags it vX.Y.Z and creates the GitHub Release from its
-# CHANGELOG.md section. Nothing publishes from a developer's machine.
+# CHANGELOG.md section. The Docs workflow then publishes the site. Nothing publishes from a
+# developer's machine.
 
 on:
   pull_request:
