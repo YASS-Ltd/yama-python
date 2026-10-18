@@ -242,7 +242,8 @@ class Yama:
             `httpx.Client`.
         ValueError: The API key isn't printable ASCII without spaces once stripped; the
             base URL isn't a valid `https://` URL, or `http://` for `localhost`,
-            `127.0.0.1` or `::1`; or `max_retries` is negative.
+            `127.0.0.1` or `[::1]`, without a query or fragment; or `max_retries` is
+            negative.
     """
 
     api_key: ApiKeyResource
@@ -277,18 +278,21 @@ class Yama:
             raise YamaError("No API key: pass api_key, or set YAMA_API_KEY.")
         if not printable_ascii(api_key):
             raise ValueError(f"{key_source} must be printable ASCII without spaces.")
-        source, base_url = "base_url", (base_url or "").strip()
+        source = "base_url"
         if not base_url:
             source = "YAMA_API_BASE_URL"
-            base_url = (os.environ.get(source) or "").strip() or DEFAULT_BASE_URL
+            base_url = os.environ.get(source) or DEFAULT_BASE_URL
+        # Stripped after the fallback, so a blank setting fails rather than going to production.
+        base_url = base_url.strip()
         # Parsed as requests will be, so the check and the requests can't disagree.
         origin = _origin(base_url)
         scheme, host, _ = origin or ("", "", None)
         plain = scheme == "http" and host in _LOCAL_HOSTS
-        if not ((scheme == "https" and host) or plain):
+        has_query = "?" in base_url or "#" in base_url
+        if not ((scheme == "https" and host) or plain) or has_query:
             raise ValueError(
                 f"{source} must be a valid https:// URL, "
-                "or http:// for localhost, 127.0.0.1 or ::1."
+                "or http:// for localhost, 127.0.0.1 or [::1], without a query or fragment."
             )
         if http_client is not None and not isinstance(http_client, httpx.Client):
             raise TypeError("http_client must be an httpx.Client: the client isn't async yet.")

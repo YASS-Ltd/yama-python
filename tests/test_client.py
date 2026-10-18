@@ -269,6 +269,10 @@ def test_cfg_3_strips_whitespace_around_the_base_url(
         "ftp://localhost",
         "https://",
         "https://xn--a-",
+        " ",
+        "\n",
+        "http://localhost:8000?x=1",
+        "https://app.yamasystems.com#top",
     ],
 )
 @pytest.mark.parametrize("from_env", [False, True])
@@ -313,7 +317,7 @@ def test_cfg_7_sends_plain_http_past_environment_proxies(
         monkeypatch.setenv(name, "http://127.0.0.1:9")  # nothing listens: a proxied request fails
     for name in ("NO_PROXY", "no_proxy"):
         monkeypatch.delenv(name, raising=False)
-    with Yama(KEY, base_url=local_server, max_retries=0) as client:
+    with Yama(KEY, base_url=local_server, max_retries=0, timeout=2) as client:
         assert client._request("GET", "api-key/") == {}
     with Yama(KEY) as client:  # https keeps the environment's proxies
         assert client._http.trust_env

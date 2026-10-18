@@ -55,7 +55,7 @@ Yama(
 ```
 
 - `DEFAULT_BASE_URL` is the only place in the code that names Yama's domain (CFG-3).
-- `base_url` is stripped of surrounding whitespace, and must use `https://`, except `http://` for `localhost`, `127.0.0.1` or `::1`, or `Yama()` raises `ValueError` (CFG-7).
+- `base_url` is stripped of surrounding whitespace (CFG-3), and must use `https://`, except `http://` for `localhost`, `127.0.0.1` or `[::1]`, with no query or fragment, or `Yama()` raises `ValueError` (CFG-7).
 - `Yama` is a context manager and has `close()`; using it after `close()` raises `ValueError` (ERR-4).
 - The key is stripped of surrounding whitespace, and must then be printable ASCII without spaces, or `Yama()` raises `ValueError` (SEC-1).
 - Resource attributes: `api_key`, `buildings`, `units`, `contacts`, `codes`, `calls`. The key string is private (`_key`).
