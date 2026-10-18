@@ -47,6 +47,8 @@ from yama._resources import (
 
 DEFAULT_BASE_URL = "https://app.yamasystems.com"
 """Where the client sends requests unless `base_url` or `YAMA_API_BASE_URL` says otherwise."""
+# Plain http is allowed only to these (CFG-7), trusting `localhost` to resolve to this machine
+# as RFC 6761 asks and operating systems do.
 _LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1"}
 
 _PYTHON = f"{sys.version_info[0]}.{sys.version_info[1]}"
@@ -238,11 +240,9 @@ class Yama:
         TypeError: `api_key` isn't a string, `timeout` isn't a number of seconds or an
             `httpx.Timeout`, `max_retries` isn't an int, or `http_client` isn't an
             `httpx.Client`.
-        ValueError: The API key (`api_key` or `YAMA_API_KEY`) isn't printable ASCII
-            without spaces, once stripped,
-            the base URL (`base_url` or `YAMA_API_BASE_URL`) isn't `https://` with a
-            host, or `http://` for `localhost`, `127.0.0.1` or `::1`, or `max_retries` is
-            negative.
+        ValueError: The API key isn't printable ASCII without spaces once stripped; the
+            base URL isn't a valid `https://` URL, or `http://` for `localhost`,
+            `127.0.0.1` or `::1`; or `max_retries` is negative.
     """
 
     api_key: ApiKeyResource
@@ -277,16 +277,16 @@ class Yama:
             raise YamaError("No API key: pass api_key, or set YAMA_API_KEY.")
         if not printable_ascii(api_key):
             raise ValueError(f"{key_source} must be printable ASCII without spaces.")
-        source = "base_url"
+        source, base_url = "base_url", (base_url or "").strip()
         if not base_url:
             source = "YAMA_API_BASE_URL"
-            base_url = os.environ.get(source) or DEFAULT_BASE_URL
+            base_url = (os.environ.get(source) or "").strip() or DEFAULT_BASE_URL
         # Parsed as requests will be, so the check and the requests can't disagree.
         scheme, host, _ = _origin(base_url) or ("", "", None)
         plain = scheme == "http" and host in _LOCAL_HOSTS
         if not ((scheme == "https" and host) or plain):
             raise ValueError(
-                f"{source} must be https:// with a host, "
+                f"{source} must be a valid https:// URL, "
                 "or http:// for localhost, 127.0.0.1 or ::1."
             )
         if http_client is not None and not isinstance(http_client, httpx.Client):
@@ -294,6 +294,7 @@ class Yama:
 
         self._key = api_key
         self._base_url = base_url.rstrip("/")
+        self._base_origin = _origin(self._base_url)
         self._timeout = _check_timeout(timeout)
         self._max_retries = _check_max_retries(max_retries)
         self._owns_http = http_client is None
@@ -372,7 +373,7 @@ class Yama:
             raise ValueError("The client is closed.")
         url = path if "://" in path else f"{self._base_url}/api/v2/{path}"
         origin = _origin(url)
-        if origin is None or origin != _origin(self._base_url):
+        if origin is None or origin != self._base_origin:
             raise YamaError("Refusing to follow a URL that isn't on the configured base URL.")
         request = self._http.build_request(
             method,

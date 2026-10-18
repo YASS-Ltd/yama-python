@@ -241,6 +241,19 @@ def test_cfg_7_accepts_https_for_any_host_and_http_for_localhost(base_url: str) 
     assert len(requests) == 1
 
 
+@pytest.mark.parametrize("from_env", [False, True])
+def test_cfg_3_strips_whitespace_around_the_base_url(
+    monkeypatch: pytest.MonkeyPatch, from_env: bool
+) -> None:
+    padded = " http://localhost:8000\r\n"
+    if from_env:
+        monkeypatch.setenv("YAMA_API_BASE_URL", padded)
+    handler, requests = recorder(respond())
+    client, _ = make_client(handler, **({} if from_env else {"base_url": padded}))
+    client._request("GET", "api-key/")
+    assert str(requests[0].url) == "http://localhost:8000/api/v2/api-key/"
+
+
 @pytest.mark.parametrize(
     "base_url",
     [
@@ -265,7 +278,7 @@ def test_cfg_7_rejects_http_for_other_hosts_without_the_key_in_the_error(
     if from_env:
         monkeypatch.setenv("YAMA_API_BASE_URL", base_url)
     source = "YAMA_API_BASE_URL" if from_env else "base_url"
-    expected = f"^{source} must be https:// with a host, or http:// for localhost"
+    expected = f"^{source} must be a valid https:// URL, or http:// for localhost"
     with pytest.raises(ValueError, match=expected) as caught:
         Yama(KEY) if from_env else Yama(KEY, base_url=base_url)
     assert KEY not in str(caught.value)
