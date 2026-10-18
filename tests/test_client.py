@@ -1,8 +1,10 @@
 import json
 import logging
 import sys
+import threading
 from collections.abc import Generator
 from concurrent.futures import ThreadPoolExecutor
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import httpx
 import pytest
@@ -264,17 +266,47 @@ def test_cfg_7_rejects_http_for_other_hosts_without_the_key_in_the_error(
         monkeypatch.setenv("YAMA_API_BASE_URL", base_url)
     else:
         monkeypatch.delenv("YAMA_API_BASE_URL", raising=False)
-    with pytest.raises(ValueError, match="https://, or http:// for localhost") as caught:
+    source = "YAMA_API_BASE_URL" if from_env else "base_url"
+    expected = f"^{source} must be https:// with a host, or http:// for localhost"
+    with pytest.raises(ValueError, match=expected) as caught:
         Yama(KEY) if from_env else Yama(KEY, base_url=base_url)
     assert KEY not in str(caught.value)
 
 
-@pytest.mark.parametrize(("base_url", "proxied"), [("http://localhost:8000", False), (None, True)])
-def test_cfg_7_keeps_plain_http_off_environment_proxies(
-    base_url: str | None, proxied: bool
+@pytest.fixture
+def local_server() -> Generator[str]:
+    """A plain-http server on this machine that answers every GET with `{}`."""
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self) -> None:
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", "2")
+            self.end_headers()
+            self.wfile.write(b"{}")
+
+        def log_message(self, *args: object) -> None:
+            pass
+
+    with ThreadingHTTPServer(("127.0.0.1", 0), Handler) as server:
+        thread = threading.Thread(target=server.serve_forever)
+        thread.start()
+        yield f"http://127.0.0.1:{server.server_port}"
+        server.shutdown()
+        thread.join()
+
+
+def test_cfg_7_sends_plain_http_past_environment_proxies(
+    monkeypatch: pytest.MonkeyPatch, local_server: str
 ) -> None:
-    with Yama(KEY, base_url=base_url) as client:
-        assert client._http.trust_env is proxied
+    for name in ("HTTP_PROXY", "http_proxy", "ALL_PROXY", "all_proxy"):
+        monkeypatch.setenv(name, "http://127.0.0.1:9")  # nothing listens: a proxied request fails
+    for name in ("NO_PROXY", "no_proxy"):
+        monkeypatch.delenv(name, raising=False)
+    with Yama(KEY, base_url=local_server, max_retries=0) as client:
+        assert client._request("GET", "api-key/") == {}
+    with Yama(KEY) as client:  # https keeps the environment's proxies
+        assert client._http.trust_env
 
 
 def test_err_4_raises_value_error_when_the_client_is_closed() -> None:
