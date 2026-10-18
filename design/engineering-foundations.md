@@ -108,7 +108,7 @@ Every PR is reviewed before it's merged, and the bar is quality, not speed. Befo
 
 1. Run `/simplify` on the change. It edits the code, so it runs before the reviews see it.
 2. Then run `/code-review high`, and `/security-review` for any change touching the API key, URLs, retries, CI or releasing. Run each in a fresh agent with its own git worktree, so the reviewer doesn't share the author's context.
-3. Check each finding against the code, then fix it, with a test where it's a bug, or answer it in the PR with the reason. Repeat until a round finds nothing new, for at most three rounds; then list what's left in the PR.
+3. Check each finding against the code, then fix it, with a test where it's a bug, or answer it in the PR with why it needs no change (a false positive, a deliberate choice, or out of scope with an issue). A finding worth changing is fixed in the PR, not answered, however small. Repeat until a round finds nothing new, for at most three rounds; then list what's left in the PR.
 
 Agents run git only inside their own worktree and stage files by name, never with `git add -A`. A docs-only PR needs only step 1. The maintainer still reads and approves every PR.
 
