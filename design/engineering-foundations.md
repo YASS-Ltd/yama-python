@@ -107,7 +107,7 @@ Branches: feature branches off `main`, squash-merged through PRs with `Closes #<
 Every PR is reviewed before it's merged, and the bar is quality, not speed. Before opening a PR, and after each later push of new code:
 
 1. Run `/simplify` on the change. It edits the code, so it runs before the reviews see it.
-2. Then run `/code-review high`, and `/security-review` for any change touching the API key, URLs, retries, CI or releasing. Run each in a fresh agent with its own git worktree, so the reviewer doesn't share the author's context. The agent runs the skill in the foreground and reports only once it has the skill's result.
+2. Then run `/code-review high`, and `/security-review` for any change touching the API key, URLs, retries, CI or releasing. Run each in a fresh agent with its own git worktree, already at the change's head, so the reviewer doesn't share the author's context. The agent waits for the skill's result, even when the skill runs in the background, and reports only that result.
 3. Check each finding against the code. Fix every one worth changing in the PR, however small, with a test where it's a bug; answer the rest in the PR with why they need no change (a false positive, a deliberate choice, or work unrelated to this PR, with a linked GitHub issue). A round ends when every reviewer has reported. Repeat until a round finds nothing new, for at most five rounds. Fix what the fifth round finds too, and say in the PR which fixes no round has reviewed.
 
 Agents run git only inside their own worktree and stage files by name, never with `git add -A`. A docs-only PR needs only step 1. The maintainer still reads and approves every PR.
