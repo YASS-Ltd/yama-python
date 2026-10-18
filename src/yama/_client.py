@@ -238,7 +238,8 @@ class Yama:
         TypeError: `api_key` isn't a string, `timeout` isn't a number of seconds or an
             `httpx.Timeout`, `max_retries` isn't an int, or `http_client` isn't an
             `httpx.Client`.
-        ValueError: The API key isn't printable ASCII without spaces, once stripped,
+        ValueError: The API key (`api_key` or `YAMA_API_KEY`) isn't printable ASCII
+            without spaces, once stripped,
             the base URL (`base_url` or `YAMA_API_BASE_URL`) isn't `https://` with a
             host, or `http://` for `localhost`, `127.0.0.1` or `::1`, or `max_retries` is
             negative.
@@ -266,17 +267,20 @@ class Yama:
         max_retries: int = 2,
         http_client: httpx.Client | None = None,
     ) -> None:
+        key_source = "api_key"
         if api_key is NOT_GIVEN:
-            api_key = os.environ.get("YAMA_API_KEY")
+            key_source, api_key = "YAMA_API_KEY", os.environ.get("YAMA_API_KEY")
         elif api_key is not None and not isinstance(api_key, str):
             raise TypeError("api_key must be a string.")
         api_key = (api_key or "").strip()
         if not api_key:
             raise YamaError("No API key: pass api_key, or set YAMA_API_KEY.")
         if not printable_ascii(api_key):
-            raise ValueError("api_key must be printable ASCII without spaces.")
-        source = "base_url" if base_url else "YAMA_API_BASE_URL"
-        base_url = base_url or os.environ.get("YAMA_API_BASE_URL") or DEFAULT_BASE_URL
+            raise ValueError(f"{key_source} must be printable ASCII without spaces.")
+        source = "base_url"
+        if not base_url:
+            source = "YAMA_API_BASE_URL"
+            base_url = os.environ.get(source) or DEFAULT_BASE_URL
         # Parsed as requests will be, so the check and the requests can't disagree.
         scheme, host, _ = _origin(base_url) or ("", "", None)
         plain = scheme == "http" and host in _LOCAL_HOSTS

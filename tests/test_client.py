@@ -264,8 +264,6 @@ def test_cfg_7_rejects_http_for_other_hosts_without_the_key_in_the_error(
 ) -> None:
     if from_env:
         monkeypatch.setenv("YAMA_API_BASE_URL", base_url)
-    else:
-        monkeypatch.delenv("YAMA_API_BASE_URL", raising=False)
     source = "YAMA_API_BASE_URL" if from_env else "base_url"
     expected = f"^{source} must be https:// with a host, or http:// for localhost"
     with pytest.raises(ValueError, match=expected) as caught:
@@ -280,7 +278,6 @@ def local_server() -> Generator[str]:
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self) -> None:
             self.send_response(200)
-            self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", "2")
             self.end_headers()
             self.wfile.write(b"{}")
@@ -289,7 +286,7 @@ def local_server() -> Generator[str]:
             pass
 
     with ThreadingHTTPServer(("127.0.0.1", 0), Handler) as server:
-        thread = threading.Thread(target=server.serve_forever)
+        thread = threading.Thread(target=server.serve_forever, kwargs={"poll_interval": 0.01})
         thread.start()
         yield f"http://127.0.0.1:{server.server_port}"
         server.shutdown()
@@ -385,11 +382,17 @@ def test_sec_1_strips_whitespace_around_the_key() -> None:
 
 
 @pytest.mark.parametrize("key", [f"{KEY} x", f"{KEY}\tx", f"{KEY}\u00e9", f"{KEY}\x00"])
+@pytest.mark.parametrize("from_env", [False, True])
 def test_sec_1_rejects_a_key_that_is_not_printable_ascii_without_the_key_in_the_error(
-    key: str,
+    monkeypatch: pytest.MonkeyPatch, key: str, from_env: bool
 ) -> None:
-    with pytest.raises(ValueError) as caught:
-        Yama(key)
+    if from_env:
+        if "\x00" in key:
+            pytest.skip("an environment variable can't hold NUL")
+        monkeypatch.setenv("YAMA_API_KEY", key)
+    source = "YAMA_API_KEY" if from_env else "api_key"
+    with pytest.raises(ValueError, match=f"^{source} must be printable ASCII") as caught:
+        Yama() if from_env else Yama(key)
     assert KEY not in str(caught.value)
     assert KEY not in repr(caught.value)
 
