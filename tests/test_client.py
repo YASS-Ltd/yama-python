@@ -164,10 +164,10 @@ def test_cfg_5_sends_its_own_authorization_whatever_auth_the_callers_client_has(
     assert "X-Auth-Flow" not in requests[0].headers  # the custom flow didn't run at all
 
 
-def test_cfg_5_sends_the_key_when_the_base_url_has_credentials() -> None:
+def test_cfg_5_sends_the_key_when_a_url_has_credentials() -> None:
     handler, requests = recorder(respond())
-    client, _ = make_client(handler, base_url="https://user:secret@api.example")
-    client._request("GET", "api-key/")
+    client, _ = make_client(handler)
+    client._request("GET", "https://user:secret@app.yamasystems.com/api/v2/api-key/")
     assert requests[0].headers["Authorization"] == f"Bearer {KEY}"
 
 
@@ -254,6 +254,26 @@ def test_cfg_3_strips_whitespace_around_the_base_url(
     assert str(requests[0].url) == "http://localhost:8000/api/v2/api-key/"
 
 
+@pytest.mark.parametrize("from_env", [False, True])
+def test_cfg_3_an_empty_base_url_falls_back_and_a_whitespace_one_is_invalid(
+    monkeypatch: pytest.MonkeyPatch, from_env: bool
+) -> None:
+    if from_env:
+        monkeypatch.setenv("YAMA_API_BASE_URL", "")
+    with Yama(KEY, base_url=None if from_env else "") as client:
+        assert client._base_url == DEFAULT_BASE_URL
+    for blank in (" ", "\n"):
+        if from_env:
+            monkeypatch.setenv("YAMA_API_BASE_URL", blank)
+        with pytest.raises(ValueError, match="must be a valid https:// URL"):
+            Yama(KEY) if from_env else Yama(KEY, base_url=blank)
+
+
+def test_cfg_3_rejects_a_base_url_that_is_not_a_string() -> None:
+    with pytest.raises(TypeError, match="base_url must be a string"):
+        Yama(KEY, base_url=httpx.URL("https://app.yamasystems.com"))  # type: ignore[arg-type]
+
+
 @pytest.mark.parametrize(
     "base_url",
     [
@@ -269,10 +289,10 @@ def test_cfg_3_strips_whitespace_around_the_base_url(
         "ftp://localhost",
         "https://",
         "https://xn--a-",
-        " ",
-        "\n",
         "http://localhost:8000?x=1",
+        "https://app.yamasystems.com?",
         "https://app.yamasystems.com#top",
+        "https://user:pw@app.yamasystems.com",
     ],
 )
 @pytest.mark.parametrize("from_env", [False, True])

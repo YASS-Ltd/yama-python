@@ -237,13 +237,13 @@ class Yama:
 
     Raises:
         YamaError: No API key was given.
-        TypeError: `api_key` isn't a string, `timeout` isn't a number of seconds or an
+        TypeError: `api_key` or `base_url` isn't a string, `timeout` isn't a number of seconds or an
             `httpx.Timeout`, `max_retries` isn't an int, or `http_client` isn't an
             `httpx.Client`.
         ValueError: The API key isn't printable ASCII without spaces once stripped; the
             base URL isn't a valid `https://` URL, or `http://` for `localhost`,
-            `127.0.0.1` or `[::1]`, without a query or fragment; or `max_retries` is
-            negative.
+            `127.0.0.1` or `[::1]`, without a query, fragment or user info; or
+            `max_retries` is negative.
     """
 
     api_key: ApiKeyResource
@@ -278,6 +278,8 @@ class Yama:
             raise YamaError("No API key: pass api_key, or set YAMA_API_KEY.")
         if not printable_ascii(api_key):
             raise ValueError(f"{key_source} must be printable ASCII without spaces.")
+        if base_url is not None and not isinstance(base_url, str):
+            raise TypeError("base_url must be a string.")
         source = "base_url"
         if not base_url:
             source = "YAMA_API_BASE_URL"
@@ -288,11 +290,13 @@ class Yama:
         origin = _origin(base_url)
         scheme, host, _ = origin or ("", "", None)
         plain = scheme == "http" and host in _LOCAL_HOSTS
-        has_query = "?" in base_url or "#" in base_url
-        if not ((scheme == "https" and host) or plain) or has_query:
+        # By character, not parsed: httpx drops a bare trailing "?" or "#". Userinfo would be
+        # ignored (requests send `_NO_AUTH`) and shown by repr().
+        extras = any(c in base_url for c in "?#@")
+        if not ((scheme == "https" and host) or plain) or extras:
             raise ValueError(
-                f"{source} must be a valid https:// URL, "
-                "or http:// for localhost, 127.0.0.1 or [::1], without a query or fragment."
+                f"{source} must be a valid https:// URL, or http:// for localhost, 127.0.0.1 "
+                "or [::1], without a query, fragment or user info."
             )
         if http_client is not None and not isinstance(http_client, httpx.Client):
             raise TypeError("http_client must be an httpx.Client: the client isn't async yet.")
