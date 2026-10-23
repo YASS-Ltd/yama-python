@@ -213,10 +213,7 @@ class _FakeAPI:
             if method == "POST" and resource == "codes":
                 return self._write_code(request, None)
             return _json(405, {"detail": f'Method "{method}" not allowed.'})
-        elif resource in self._data:
-            item = self._data[resource].get(parts[1])
-            if item is None:
-                return _json(404, {"detail": "Not found."})
+        elif resource in self._data and (item := self._data[resource].get(parts[1])):
             if method == "GET":
                 return _json(200, item)
             if resource == "codes" and method == "DELETE":
