@@ -78,7 +78,7 @@ def test_test_1_pages_every_list_and_gets_each_item(api: httpx.Client, path: str
     for item in items:
         assert api.get(f"{path}{item['uuid']}/").json() == item
     response = api.get(f"{path}{MISSING}/")
-    assert response.status_code == 404
+    assert (response.status_code, response.json()) == (404, {"detail": "Not found."})
 
 
 def test_test_1_filters_lists(api: httpx.Client) -> None:

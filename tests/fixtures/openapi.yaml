@@ -137,7 +137,7 @@ info:
     - **400:** a field or query parameter has a bad value, such as `{"expires_at": ["Expiry must be in the future."]}`, or the operation doesn't take that query parameter (often a typo): `{"buildling": ["Unknown query parameter."]}`. The same goes for the body: `{"uuid": ["This field is read-only."]}` or `{"colour": ["Unknown field."]}`. Creating a code on a unit outside the key's unit access reads `{"unit": ["Unit does not exist."]}`.
     - **401:** the key is malformed, unknown, deleted or expired, or its owner was deactivated: `{"detail": "Invalid API key."}` or `{"detail": "API key expired."}`. `Authorization: Bearer` with nothing after it gets `{"detail": "No API key was sent after Bearer."}`. Every 401 carries `WWW-Authenticate: Bearer realm="api"`.
     - **403:** no credentials were sent, `{"detail": "Authentication credentials were not provided."}`, or the key's permission is too low for the resource and method: `{"detail": "This API key does not grant Contacts: Read."}`. The permission check runs before any lookup, so a 403 never reveals whether an object exists.
-    - **404:** the object doesn't exist, belongs to someone else, or is outside the key's unit access. These look the same on purpose: `{"detail": "Not found."}`.
+    - **404:** the object doesn't exist, belongs to someone else, or is outside the key's unit access. These look the same on purpose: `{"detail": "Not found."}`. Branch on the status code, not on `detail`'s text, which is for people to read.
     - **405:** the endpoint doesn't offer this method; everything but access codes is read-only: `{"detail": "Method \"PATCH\" not allowed."}`.
     - **409:** a request with the same `Idempotency-Key` is still running (see Retrying a create safely below): `{"detail": "A request with this Idempotency-Key is still in progress. Retry shortly."}`. Wait the `Retry-After` seconds and send the same request again.
     - **410:** a retried create replayed a code that has since been deleted or is no longer within the key's reach: `{"detail": "The object this request created has since been deleted or is no longer within your reach."}`. The create did happen; don't send it again with the same key.
@@ -320,12 +320,13 @@ info:
     ```
     HTTP/1.1 204 No Content
     API-Version: v2
+    Request-Id: req_3f9c0b7e5d2a4c18b6e1f04a9d7c2e53
     ```
 
     The code stops working immediately. Fetching it afterwards is a `404`:
 
     ```json
-    {"detail": "No AccessCode matches the given query."}
+    {"detail": "Not found."}
     ```
 
     ### 6. Fetch a unit's calls for a date range
@@ -355,8 +356,8 @@ info:
           "started_at": "2026-10-10T22:09:11.312885Z",
           "duration_seconds": 11,
           "result": "code_not_accepted",
-          "result_label": "Not accepted",
-          "summary": "5678 · Expired",
+          "result_label": "Wrong or expired code",
+          "summary": "5678 · Expired code",
           "imported": false,
           "steps": [
             {"kind": "received", "at": "2026-10-10T22:09:11.320322Z", "text": "Call started", "attempt_result": null, "entered_digits": null, "code_name": null, "contact_name": null, "dial_status": null},
@@ -372,12 +373,12 @@ info:
           "started_at": "2026-10-10T22:09:10.438762Z",
           "duration_seconds": 55,
           "result": "forwarded",
-          "result_label": "Forwarded",
-          "summary": "Forwarded to a contact · Answered",
+          "result_label": "Rang resident: answered",
+          "summary": "Rang a contact · Answered",
           "imported": false,
           "steps": [
             {"kind": "received", "at": "2026-10-10T22:09:10.442333Z", "text": "Call started", "attempt_result": null, "entered_digits": null, "code_name": null, "contact_name": null, "dial_status": null},
-            {"kind": "dial_started", "at": "2026-10-10T22:09:10.663861Z", "text": "Forwarded to a contact", "attempt_result": null, "entered_digits": null, "code_name": null, "contact_name": null, "dial_status": null},
+            {"kind": "dial_started", "at": "2026-10-10T22:09:10.663861Z", "text": "Rang a contact", "attempt_result": null, "entered_digits": null, "code_name": null, "contact_name": null, "dial_status": null},
             {"kind": "dial_ended", "at": "2026-10-10T22:09:10.837512Z", "text": "Answered", "attempt_result": null, "entered_digits": null, "code_name": null, "contact_name": null, "dial_status": "completed"},
             {"kind": "completed", "at": "2026-10-10T22:09:11.041793Z", "text": "Call ended", "attempt_result": null, "entered_digits": null, "code_name": null, "contact_name": null, "dial_status": null}
           ]
@@ -399,8 +400,8 @@ info:
       "next": null,
       "previous": "https://app.yamasystems.com/api/v2/calls/?end=2026-10-31&limit=2&start=2026-10-01&unit=dd1053d5-0a4b-4c0d-a619-6a1457d97de6",
       "results": [
-        {"uuid": "9de1afc1-2158-4680-9c94-f0c2229d513a", "reference": "6A26E5", "started_at": "2026-10-10T22:09:09.743719Z", "duration_seconds": 22, "result": "code_not_accepted", "result_label": "Not accepted", "summary": "9999 · Not accepted", "imported": false, "steps": ["...3 steps..."]},
-        {"uuid": "793289bc-6f58-4c7b-bd54-c4365953278b", "reference": "E191C4", "started_at": "2026-10-10T22:09:08.902359Z", "duration_seconds": 14, "result": "code_accepted", "result_label": "Accepted", "summary": "Primary Code · Accepted", "imported": false, "steps": ["...4 steps..."]}
+        {"uuid": "9de1afc1-2158-4680-9c94-f0c2229d513a", "reference": "6A26E5", "started_at": "2026-10-10T22:09:09.743719Z", "duration_seconds": 22, "result": "code_not_accepted", "result_label": "Wrong or expired code", "summary": "9999 · Wrong code", "imported": false, "steps": ["...3 steps..."]},
+        {"uuid": "793289bc-6f58-4c7b-bd54-c4365953278b", "reference": "E191C4", "started_at": "2026-10-10T22:09:08.902359Z", "duration_seconds": 14, "result": "code_accepted", "result_label": "Entered with code", "summary": "Primary Code · Accepted", "imported": false, "steps": ["...4 steps..."]}
       ]
     }
     ```
@@ -411,7 +412,7 @@ info:
 
     - `count` is the number of calls in the date range and filters, not the page size.
     - `unit` and `building` are the call's unit and the building whose intercom placed it, as at call time (`building` is `null` for a unit outside any building). `GET /api/v2/calls/{uuid}/` returns one call in the same shape, whatever its date.
-    - `reference` is the call reference the portal shows. `result` is for code; `result_label`, `summary` and each step's `text` are the portal's wording, for display.
+    - `reference` is the call reference the portal shows. `result` is for code; `result_label`, `summary` and each step's `text` are the portal's wording, for display, and can change, so branch on `result`. For a `forwarded` call, `result_label` says whether the resident answered.
     - `duration_seconds` is `null` while a call is in progress or when it wasn't recorded. `imported` is `true` for calls rebuilt from the phone carrier's records, which have fewer details.
     - Step facts are `null` when they don't apply: `attempt_result` (`accepted`, `not_accepted`, `expired`, `retired`, `refused`) on code entries; `entered_digits` on failed attempts only; `code_name` on accepted attempts; `contact_name` on forwarding steps; `dial_status` on the end of a forward.
     - **What your key sees.** Without Access codes: Read, `code_name` and `entered_digits` are `null` and the text says "A code" and "(hidden)". Without Contacts: Read, `contact_name` is `null` and the text says "a contact". That's why the example above, from a key without Contacts, says "Forwarded to a contact".
@@ -499,8 +500,8 @@ info:
     rejected: 400 {'expires_at': ['Expiry must be in the future.']}
     deleted, now: 404
     call: 2026-10-10T22:09:11.312885Z 7DCD03 code_not_accepted 5678 · Expired
-    call: 2026-10-10T22:09:10.438762Z 46A8E1 forwarded Forwarded to a contact · Answered
-    call: 2026-10-10T22:09:09.743719Z 6A26E5 code_not_accepted 9999 · Not accepted
+    call: 2026-10-10T22:09:10.438762Z 46A8E1 forwarded Rang a contact · Answered
+    call: 2026-10-10T22:09:09.743719Z 6A26E5 code_not_accepted 9999 · Wrong code
     call: 2026-10-10T22:09:08.902359Z E191C4 code_accepted Primary Code · Accepted
     ```
 
