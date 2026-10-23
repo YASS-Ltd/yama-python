@@ -284,4 +284,7 @@ def test_test_1_answers_410_when_a_replayed_create_was_deleted(api: httpx.Client
     code = api.post("codes/", json=body, headers=headers).json()
     assert api.delete(f"codes/{code['uuid']}/").status_code == 204
     response = api.post("codes/", json=body, headers=headers)
-    assert response.status_code == 410
+    detail = (
+        "The object this request created has since been deleted or is no longer within your reach."
+    )
+    assert (response.status_code, response.json()) == (410, {"detail": detail})

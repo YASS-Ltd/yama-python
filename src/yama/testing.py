@@ -213,7 +213,7 @@ class _FakeAPI:
             if method == "POST" and resource == "codes":
                 return self._write_code(request, None)
             return _json(405, {"detail": f'Method "{method}" not allowed.'})
-        elif resource in self._data and (item := self._data[resource].get(parts[1])):
+        elif resource in self._data and (item := self._data[resource].get(parts[1])) is not None:
             if method == "GET":
                 return _json(200, item)
             if resource == "codes" and method == "DELETE":
@@ -283,7 +283,10 @@ class _FakeAPI:
             return _json(status, saved, replayed)
         code = self._data["codes"].get(saved)
         if code is None:
-            detail = "The object this request created has since been deleted."
+            detail = (
+                "The object this request created has since been deleted"
+                " or is no longer within your reach."
+            )
             return _json(410, {"detail": detail}, replayed)
         return _json(201, code, replayed)
 
