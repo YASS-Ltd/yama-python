@@ -63,6 +63,11 @@ def operations() -> dict[str, dict[str, Any]]:
     }
 
 
+def methods() -> list[tuple[str, str]]:
+    """Every (method, path template) the schema offers."""
+    return [(m.upper(), path) for path, ops in _schema()["paths"].items() for m in ops]
+
+
 def _path(request: httpx.Request) -> dict[str, Any]:
     """The schema's operations on `request`'s path, by method."""
     paths = _schema()["paths"]
@@ -110,7 +115,8 @@ def validate_response(response: httpx.Response) -> None:
     if response.status_code == 415:
         offered = _path(request).get(request.method.lower(), {})
         assert "requestBody" in offered, f"{request.method} takes no body"
-        assert "application/json" not in request.headers.get("Content-Type", "").lower()
+        media_type = request.headers.get("Content-Type", "").split(";")[0].strip().lower()
+        assert request.content and media_type != "application/json", "the body is JSON"
         validate("Error", response.json())
         return
     responses = operation(request)["responses"]
