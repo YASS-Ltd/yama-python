@@ -92,10 +92,18 @@ def validate_request(request: httpx.Request) -> None:
     validate(ref.rsplit("/", 1)[-1], json.loads(request.content))
 
 
+# Statuses the schema's guide gives for every endpoint, which the operations don't list:
+# a method the endpoint doesn't offer, and a body that isn't JSON.
+GENERAL_ERRORS = {405, 415}
+
+
 def validate_response(response: httpx.Response) -> None:
     """Raise unless the schema documents `response`'s status for its operation, and its body
     matches that status's schema exactly."""
     request = response.request
+    if response.status_code in GENERAL_ERRORS:
+        validate("Error", response.json())
+        return
     responses = operation(request)["responses"]
     status = str(response.status_code)
     assert status in responses, f"{request.method} {request.url.path} doesn't document {status}"

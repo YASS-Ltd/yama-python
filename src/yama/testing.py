@@ -10,9 +10,10 @@
 The fake holds a few made-up buildings, units, contacts, access codes and calls, and behaves
 like the real API: lists take the same filters; access codes can be created, replaced,
 updated and deleted; bad input, such as an expiry in the past (other than a code's current
-one, sent back), gets a 400 in the API's format, and a missing object a 404. A create
-repeating an idempotency key replays the first answer, or gets a 422 when its body differs,
-or a 410 when the code it created has since been deleted.
+one, sent back), gets a 400 in the API's format, a missing object a 404, a method the endpoint
+doesn't offer a 405, and a body that isn't JSON a 415. A create repeating an idempotency key
+replays the first answer, or gets a 422 when its body differs, or a 410 when the code it created
+has since been deleted.
 Any API key works, except `rate-limited`, which gets a 429 with a `Retry-After` longer than the
 client waits, on every request.
 """
@@ -203,26 +204,27 @@ class _FakeAPI:
         path, method = request.url.path, request.method
         parts = path.removeprefix("/api/v2/").strip("/").split("/")
         resource = parts[0]
-        if not path.startswith("/api/v2/") or len(parts) > 2:
+        known = resource in self._data or parts == ["api-key"]
+        if not path.startswith("/api/v2/") or len(parts) > 2 or not known:
             return _json(404, {"detail": "Not found."})
-        if parts == ["api-key"] and method == "GET":
+        writes = ("POST",) if len(parts) == 1 else ("PUT", "PATCH", "DELETE")
+        if method != "GET" and not (resource == "codes" and method in writes):
+            return _json(405, {"detail": f'Method "{method}" not allowed.'})
+        if resource == "api-key":
             return _json(200, _API_KEY)
-        elif resource in self._data and len(parts) == 1:
-            if method == "GET":
-                return self._list(request.url, resource)
-            if method == "POST" and resource == "codes":
-                return self._write_code(request, None)
-            return _json(405, {"detail": f'Method "{method}" not allowed.'})
-        elif resource in self._data and (item := self._data[resource].get(parts[1])) is not None:
-            if method == "GET":
-                return _json(200, item)
-            if resource == "codes" and method == "DELETE":
-                del self._data["codes"][item["uuid"]]
-                return _json(204)
-            if resource == "codes" and method in ("PUT", "PATCH"):
-                return self._write_code(request, item)
-            return _json(405, {"detail": f'Method "{method}" not allowed.'})
-        return _json(404, {"detail": "Not found."})
+        if len(parts) == 1 and method == "GET":
+            return self._list(request.url, resource)
+        if len(parts) == 1:
+            return self._write_code(request, None)
+        item = self._data[resource].get(parts[1])
+        if item is None:
+            return _json(404, {"detail": "Not found."})
+        if method == "GET":
+            return _json(200, item)
+        if method == "DELETE":
+            del self._data["codes"][item["uuid"]]
+            return _json(204)
+        return self._write_code(request, item)
 
     def _list(self, url: httpx.URL, resource: str) -> httpx.Response:
         query = dict(url.params)
@@ -259,6 +261,10 @@ class _FakeAPI:
         )
 
     def _write_code(self, request: httpx.Request, current: dict[str, Any] | None) -> httpx.Response:
+        media_type = request.headers.get("Content-Type", "").split(";")[0].strip()
+        if request.content and media_type != "application/json":
+            detail = f'Unsupported media type "{media_type}" in request.'
+            return _json(415, {"detail": detail})
         try:
             body = json.loads(request.content)
         except ValueError:

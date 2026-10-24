@@ -288,3 +288,33 @@ def test_test_1_answers_410_when_a_replayed_create_was_deleted(api: httpx.Client
         "The object this request created has since been deleted or is no longer within your reach."
     )
     assert (response.status_code, response.json()) == (410, {"detail": detail})
+
+
+@pytest.mark.parametrize(
+    ("method", "path"),
+    [
+        ("POST", "api-key/"),
+        ("DELETE", "api-key/"),
+        ("POST", "buildings/"),
+        ("DELETE", f"buildings/{MISSING}/"),
+        ("PATCH", f"calls/{MISSING}/"),
+        ("DELETE", "codes/"),
+        ("POST", f"codes/{MISSING}/"),
+    ],
+)
+def test_test_1_answers_405_before_looking_anything_up(
+    api: httpx.Client, method: str, path: str
+) -> None:
+    response = api.request(method, path)
+    detail = f'Method "{method}" not allowed.'
+    assert (response.status_code, response.json()) == (405, {"detail": detail})
+
+
+def test_test_1_refuses_a_body_that_isnt_json_before_running_it(api: httpx.Client) -> None:
+    unit = everything(api, "units/")[0]["uuid"]
+    body = {"unit": unit, "code": "13579"}
+    headers = {"Idempotency-Key": "form"}
+    response = api.post("codes/", data=body, headers=headers)
+    detail = 'Unsupported media type "application/x-www-form-urlencoded" in request.'
+    assert (response.status_code, response.json()) == (415, {"detail": detail})
+    assert api.post("codes/", json=body, headers=headers).status_code == 201
