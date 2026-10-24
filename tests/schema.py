@@ -63,15 +63,21 @@ def operations() -> dict[str, dict[str, Any]]:
     }
 
 
-def operation(request: httpx.Request) -> dict[str, Any]:
-    """The schema's operation for `request`."""
+def _path(request: httpx.Request) -> dict[str, Any]:
+    """The schema's operations on `request`'s path, by method."""
     paths = _schema()["paths"]
     template = next(
         (t for t in paths if re.fullmatch(re.sub(r"\{\w+\}", "[^/]+", t), request.url.path)),
         None,
     )
     assert template, f"no operation for {request.url.path}"
-    found: dict[str, Any] = paths[template][request.method.lower()]
+    found: dict[str, Any] = paths[template]
+    return found
+
+
+def operation(request: httpx.Request) -> dict[str, Any]:
+    """The schema's operation for `request`."""
+    found: dict[str, Any] = _path(request)[request.method.lower()]
     return found
 
 
@@ -92,16 +98,17 @@ def validate_request(request: httpx.Request) -> None:
     validate(ref.rsplit("/", 1)[-1], json.loads(request.content))
 
 
-# Statuses the schema's guide gives for every endpoint, which the operations don't list:
-# a method the endpoint doesn't offer, and a body that isn't JSON.
-GENERAL_ERRORS = {405, 415}
-
-
 def validate_response(response: httpx.Response) -> None:
     """Raise unless the schema documents `response`'s status for its operation, and its body
     matches that status's schema exactly."""
     request = response.request
-    if response.status_code in GENERAL_ERRORS:
+    # The schema's guide gives these for every endpoint, but the operations don't list them.
+    if response.status_code == 405:
+        assert request.method.lower() not in _path(request), f"{request.method} is offered"
+        validate("Error", response.json())
+        return
+    if response.status_code == 415:
+        assert "requestBody" in operation(request), f"{request.method} takes no body"
         validate("Error", response.json())
         return
     responses = operation(request)["responses"]

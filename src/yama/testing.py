@@ -208,13 +208,14 @@ class _FakeAPI:
         if not path.startswith("/api/v2/") or len(parts) > 2 or not known:
             return _json(404, {"detail": "Not found."})
         writes = ("POST",) if len(parts) == 1 else ("PUT", "PATCH", "DELETE")
-        if method != "GET" and not (resource == "codes" and method in writes):
+        allowed = ("GET", *writes) if resource == "codes" else ("GET",)
+        if method not in allowed:
             return _json(405, {"detail": f'Method "{method}" not allowed.'})
         if resource == "api-key":
             return _json(200, _API_KEY)
-        if len(parts) == 1 and method == "GET":
-            return self._list(request.url, resource)
         if len(parts) == 1:
+            if method == "GET":
+                return self._list(request.url, resource)
             return self._write_code(request, None)
         item = self._data[resource].get(parts[1])
         if item is None:
