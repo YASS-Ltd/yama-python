@@ -108,7 +108,9 @@ def validate_response(response: httpx.Response) -> None:
         validate("Error", response.json())
         return
     if response.status_code == 415:
-        assert "requestBody" in operation(request), f"{request.method} takes no body"
+        offered = _path(request).get(request.method.lower(), {})
+        assert "requestBody" in offered, f"{request.method} takes no body"
+        assert "application/json" not in request.headers.get("Content-Type", "").lower()
         validate("Error", response.json())
         return
     responses = operation(request)["responses"]

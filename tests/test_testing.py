@@ -1,3 +1,4 @@
+import json
 from typing import Any
 
 import httpx
@@ -318,3 +319,15 @@ def test_test_1_refuses_a_body_that_isnt_json_before_running_it(api: httpx.Clien
     detail = 'Unsupported media type "application/x-www-form-urlencoded" in request.'
     assert (response.status_code, response.json()) == (415, {"detail": detail})
     assert api.post("codes/", json=body, headers=headers).status_code == 201
+    assert api.post("codes/", data=body, headers=headers).status_code == 415
+
+
+def test_test_1_reads_the_media_type_as_the_api_does(api: httpx.Client) -> None:
+    unit = everything(api, "units/")[0]["uuid"]
+    body = json.dumps({"unit": unit, "code": "24680"})
+    created = api.post("codes/", content=body, headers={"Content-Type": "Application/JSON"})
+    assert created.status_code == 201
+    media_type = "text/plain; charset=utf-8"
+    response = api.post("codes/", content=body, headers={"Content-Type": media_type})
+    detail = f'Unsupported media type "{media_type}" in request.'
+    assert (response.status_code, response.json()) == (415, {"detail": detail})

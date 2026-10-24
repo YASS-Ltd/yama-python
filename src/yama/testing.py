@@ -223,7 +223,7 @@ class _FakeAPI:
         if method == "GET":
             return _json(200, item)
         if method == "DELETE":
-            del self._data["codes"][item["uuid"]]
+            del self._data[resource][item["uuid"]]
             return _json(204)
         return self._write_code(request, item)
 
@@ -262,9 +262,9 @@ class _FakeAPI:
         )
 
     def _write_code(self, request: httpx.Request, current: dict[str, Any] | None) -> httpx.Response:
-        media_type = request.headers.get("Content-Type", "").split(";")[0].strip()
-        if request.content and media_type != "application/json":
-            detail = f'Unsupported media type "{media_type}" in request.'
+        content_type = request.headers.get("Content-Type", "")
+        if request.content and content_type.split(";")[0].strip().lower() != "application/json":
+            detail = f'Unsupported media type "{content_type}" in request.'
             return _json(415, {"detail": detail})
         try:
             body = json.loads(request.content)
