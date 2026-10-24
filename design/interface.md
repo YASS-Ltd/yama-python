@@ -121,7 +121,7 @@ YamaError                       # base; also raised for misconfiguration (CFG-2)
     ├── PermissionDeniedError   # 403
     ├── NotFoundError           # 404
     ├── ConflictError           # 409: an Idempotency-Key still being processed (retried, RTY-6)
-    ├── GoneError               # 410: a replayed create whose code has since been deleted; it was created
+    ├── GoneError               # 410: a replayed create whose code has since been deleted or is out of reach; it was created
     ├── UnprocessableEntityError  # 422: an Idempotency-Key reused with a different request
     ├── RateLimitError          # 429; .retry_after: int | None (seconds)
     └── ServerError             # 5xx

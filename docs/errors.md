@@ -71,5 +71,5 @@ except (APIConnectionError, ConflictError, ServerError) as error:
 
 - **Same idempotency key, same data.** An idempotency key reused with different data raises `UnprocessableEntityError`. A time sent with a different UTC offset counts as different data, so work out times such as `expires_at` once.
 - **The API remembers an idempotency key for 24 hours**, along with the answer it gave. A repeat within that time gets the same answer: the code, or the same 400. To send corrected data after a `BadRequestError`, use a new idempotency key.
-- **`GoneError`** means the create with that idempotency key happened, but the code has since been deleted. Don't create it again with that idempotency key.
+- **`GoneError`** means the create with that idempotency key happened, but the code has since been deleted or is out of the API key's reach. Don't create it again with that idempotency key.
 - **Your own idempotency key.** When your own code may repeat a create, such as a job that re-runs or a form submitted twice, pass a stable `idempotency_key` of your own: one derived from your own record, or one generated when you render the form and carried in a hidden field.

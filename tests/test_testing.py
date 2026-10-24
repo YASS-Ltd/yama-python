@@ -78,7 +78,7 @@ def test_test_1_pages_every_list_and_gets_each_item(api: httpx.Client, path: str
     for item in items:
         assert api.get(f"{path}{item['uuid']}/").json() == item
     response = api.get(f"{path}{MISSING}/")
-    assert response.status_code == 404
+    assert (response.status_code, response.json()) == (404, {"detail": "Not found."})
 
 
 def test_test_1_filters_lists(api: httpx.Client) -> None:
@@ -284,4 +284,7 @@ def test_test_1_answers_410_when_a_replayed_create_was_deleted(api: httpx.Client
     code = api.post("codes/", json=body, headers=headers).json()
     assert api.delete(f"codes/{code['uuid']}/").status_code == 204
     response = api.post("codes/", json=body, headers=headers)
-    assert response.status_code == 410
+    detail = (
+        "The object this request created has since been deleted or is no longer within your reach."
+    )
+    assert (response.status_code, response.json()) == (410, {"detail": detail})

@@ -50,6 +50,14 @@ def _step(kind: str, at: str, text: str, **facts: str) -> dict[str, Any]:
     return {"kind": kind, "at": at, "text": text, **empty, **facts}
 
 
+_LABELS = {
+    "code_accepted": "Entered with code",
+    "forwarded": "Rang resident: answered",
+    "code_not_accepted": "Wrong or expired code",
+    "hung_up": "Hung up",
+}
+
+
 def _call(n: int, unit: str, building: str, at: str, result: str, summary: str) -> dict[str, Any]:
     steps = [_step("received", at, "Call started"), _step("completed", at, "Call ended")]
     return {
@@ -60,7 +68,7 @@ def _call(n: int, unit: str, building: str, at: str, result: str, summary: str) 
         "started_at": at,
         "duration_seconds": 12,
         "result": result,
-        "result_label": result.replace("_", " ").capitalize(),
+        "result_label": _LABELS[result],
         "summary": summary,
         "imported": False,
         "steps": steps,
@@ -154,8 +162,8 @@ _DATA: dict[str, list[dict[str, Any]]] = {
     ],
     "calls": [
         _call(51, U1, B1, "2026-10-10T22:09:11Z", "code_accepted", "Primary · Accepted"),
-        _call(52, U2, B1, "2026-10-09T18:30:00Z", "forwarded", "Forwarded to a contact"),
-        _call(53, U1, B1, "2026-10-08T07:15:42Z", "code_not_accepted", "9999 · Not accepted"),
+        _call(52, U2, B1, "2026-10-09T18:30:00Z", "forwarded", "Rang a contact · Answered"),
+        _call(53, U1, B1, "2026-10-08T07:15:42Z", "code_not_accepted", "9999 · Wrong code"),
         _call(54, U3, B2, "2026-09-30T12:00:00Z", "hung_up", "Hung up"),
     ],
 }
@@ -165,13 +173,6 @@ _FILTERS = {
     "contacts": ("unit", "number", "menu_digit"),
     "codes": ("unit", "code", "name", "search"),
     "calls": ("unit", "building", "result", "start", "end"),
-}
-_NAMES = {
-    "buildings": "Building",
-    "units": "Unit",
-    "contacts": "Contact",
-    "codes": "AccessCode",
-    "calls": "CallLogEntry",
 }
 _CODE_FIELDS = ("unit", "code", "name", "expires_at")
 
@@ -212,10 +213,7 @@ class _FakeAPI:
             if method == "POST" and resource == "codes":
                 return self._write_code(request, None)
             return _json(405, {"detail": f'Method "{method}" not allowed.'})
-        elif resource in self._data:
-            item = self._data[resource].get(parts[1])
-            if item is None:
-                return _json(404, {"detail": f"No {_NAMES[resource]} matches the given query."})
+        elif resource in self._data and (item := self._data[resource].get(parts[1])) is not None:
             if method == "GET":
                 return _json(200, item)
             if resource == "codes" and method == "DELETE":
@@ -285,7 +283,10 @@ class _FakeAPI:
             return _json(status, saved, replayed)
         code = self._data["codes"].get(saved)
         if code is None:
-            detail = "The object this request created has since been deleted."
+            detail = (
+                "The object this request created has since been deleted"
+                " or is no longer within your reach."
+            )
             return _json(410, {"detail": detail}, replayed)
         return _json(201, code, replayed)
 

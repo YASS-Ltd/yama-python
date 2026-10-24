@@ -38,8 +38,8 @@ CALL = {
     "started_at": "2026-10-10T22:09:11.312885Z",
     "duration_seconds": 11,
     "result": "code_not_accepted",
-    "result_label": "Not accepted",
-    "summary": "5678 · Expired",
+    "result_label": "Wrong or expired code",
+    "summary": "5678 · Expired code",
     "imported": False,
     "steps": [
         {"kind": "received", "at": "2026-10-10T22:09:11Z", "text": "Call started", **NULL_STEP},
