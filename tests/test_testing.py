@@ -1,9 +1,11 @@
+import json
+import re
 from typing import Any
 
 import httpx
 import pytest
 
-from tests.schema import validate_response
+from tests.schema import methods, validate_response
 from yama import RateLimitError, Yama
 from yama.testing import fake_transport
 
@@ -288,3 +290,53 @@ def test_test_1_answers_410_when_a_replayed_create_was_deleted(api: httpx.Client
         "The object this request created has since been deleted or is no longer within your reach."
     )
     assert (response.status_code, response.json()) == (410, {"detail": detail})
+
+
+@pytest.mark.parametrize(
+    ("method", "path"),
+    [
+        ("POST", "api-key/"),
+        ("DELETE", "api-key/"),
+        ("POST", "buildings/"),
+        ("DELETE", f"buildings/{MISSING}/"),
+        ("PATCH", f"calls/{MISSING}/"),
+        ("DELETE", "codes/"),
+        ("POST", f"codes/{MISSING}/"),
+    ],
+)
+def test_test_1_answers_405_before_looking_anything_up(
+    api: httpx.Client, method: str, path: str
+) -> None:
+    response = api.request(method, path)
+    detail = f'Method "{method}" not allowed.'
+    assert (response.status_code, response.json()) == (405, {"detail": detail})
+
+
+def test_test_1_refuses_a_body_that_isnt_json_before_running_it(api: httpx.Client) -> None:
+    unit = everything(api, "units/")[0]["uuid"]
+    body = {"unit": unit, "code": "13579"}
+    headers = {"Idempotency-Key": "form"}
+    response = api.post("codes/", data=body, headers=headers)
+    detail = 'Unsupported media type "application/x-www-form-urlencoded" in request.'
+    assert (response.status_code, response.json()) == (415, {"detail": detail})
+    assert api.post("codes/", json=body, headers=headers).status_code == 201
+    assert api.post("codes/", data=body, headers=headers).status_code == 415
+
+
+def test_test_1_reads_the_media_type_as_the_api_does(api: httpx.Client) -> None:
+    unit = everything(api, "units/")[0]["uuid"]
+    body = json.dumps({"unit": unit, "code": "24680"})
+    created = api.post("codes/", content=body, headers={"Content-Type": "Application/JSON"})
+    assert created.status_code == 201
+    media_type = "text/plain; charset=utf-8"
+    response = api.post("codes/", content=body, headers={"Content-Type": media_type})
+    detail = f'Unsupported media type "{media_type}" in request.'
+    assert (response.status_code, response.json()) == (415, {"detail": detail})
+
+
+@pytest.mark.parametrize(("method", "path"), methods())
+def test_test_1_offers_every_method_the_schema_does(
+    api: httpx.Client, method: str, path: str
+) -> None:
+    url = re.sub(r"\{\w+\}", MISSING, path.removeprefix("/api/v2/"))
+    assert api.request(method, url).status_code != 405
