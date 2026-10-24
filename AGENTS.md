@@ -42,7 +42,7 @@ The API behaviour the client must handle is written down once, as requirements i
 ## Git
 
 - `main` is the default branch. Work happens on `feature/...` branches and is squash-merged through PRs.
-- Before opening a PR, and after each later push, run the review loop in `design/engineering-foundations.md` (CI and Branch Policy): `/simplify`, then `/code-review` and, where it applies, `/security-review` in fresh agents with their own worktrees, fixing every finding in the change worth changing, filing an issue for problems that were already there, and answering the rest with why.
+- Before opening a PR, and after each later push, run the review loop in `design/engineering-foundations.md` (CI and Branch Policy): `/simplify`, then `/code-review` and, where it applies, `/security-review` in fresh agents with their own worktrees, triaging each finding before fixing it. The PR body follows `.github/pull_request_template.md`.
 - Every user-facing PR includes a `## Changelog` section: one short bullet per change a user of the library would notice, saying what changed for them rather than how it was built, tagged `[Added]`/`[Changed]`/`[Fixed]`/`[Security]`/`[Removed]` (untagged counts as `[Changed]`). Start a `[Changed]` bullet with `Breaking:` when it breaks existing callers, because the bullets set the next version number. Leave the section out of housekeeping PRs (CI, refactors, docs). Leave out AI-tool attribution in Changelog bullets.
 
 ## Issues and Projects

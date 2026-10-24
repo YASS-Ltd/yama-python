@@ -1,6 +1,14 @@
-## Summary
+## Why
 
-<!-- What this changes and why. Put "Closes #<n>" here when it finishes an issue. -->
+<!-- The problem in plain words, for a reviewer who hasn't read the issue. Put "Closes #<n>" here when it finishes an issue. -->
+
+## What
+
+<!-- The end result for someone using the library. -->
+
+## For the reviewer
+
+<!-- Decisions to confirm, behaviour changes, declined review findings with a one-line reason each, and which fixes no review round has seen. -->
 
 ## Changelog
 
