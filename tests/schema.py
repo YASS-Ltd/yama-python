@@ -63,15 +63,26 @@ def operations() -> dict[str, dict[str, Any]]:
     }
 
 
-def operation(request: httpx.Request) -> dict[str, Any]:
-    """The schema's operation for `request`."""
+def methods() -> list[tuple[str, str]]:
+    """Every (method, path template) the schema offers."""
+    return [(m.upper(), path) for path, ops in _schema()["paths"].items() for m in ops]
+
+
+def _path(request: httpx.Request) -> dict[str, Any]:
+    """The schema's operations on `request`'s path, by method."""
     paths = _schema()["paths"]
     template = next(
         (t for t in paths if re.fullmatch(re.sub(r"\{\w+\}", "[^/]+", t), request.url.path)),
         None,
     )
     assert template, f"no operation for {request.url.path}"
-    found: dict[str, Any] = paths[template][request.method.lower()]
+    found: dict[str, Any] = paths[template]
+    return found
+
+
+def operation(request: httpx.Request) -> dict[str, Any]:
+    """The schema's operation for `request`."""
+    found: dict[str, Any] = _path(request)[request.method.lower()]
     return found
 
 
@@ -96,6 +107,18 @@ def validate_response(response: httpx.Response) -> None:
     """Raise unless the schema documents `response`'s status for its operation, and its body
     matches that status's schema exactly."""
     request = response.request
+    # The schema's guide gives these for every endpoint, but the operations don't list them.
+    if response.status_code == 405:
+        assert request.method.lower() not in _path(request), f"{request.method} is offered"
+        validate("Error", response.json())
+        return
+    if response.status_code == 415:
+        offered = _path(request).get(request.method.lower(), {})
+        assert "requestBody" in offered, f"{request.method} takes no body"
+        media_type = request.headers.get("Content-Type", "").split(";")[0].strip().lower()
+        assert request.content and media_type != "application/json", "the body is JSON"
+        validate("Error", response.json())
+        return
     responses = operation(request)["responses"]
     status = str(response.status_code)
     assert status in responses, f"{request.method} {request.url.path} doesn't document {status}"
