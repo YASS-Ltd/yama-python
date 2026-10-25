@@ -4,6 +4,16 @@ All notable changes to yama-python. The project follows [Semantic Versioning](ht
 
 ## Unreleased
 
+## 0.2.1 - 2026-10-25
+
+### Changed
+
+- `yama.testing`'s fake API answers 404s, 410s and call labels with the same wording as the live API.
+
+### Fixed
+
+- `yama.testing`'s fake API answers 405 for a method an endpoint doesn't offer and 415 for a body that isn't JSON, as the live API does, instead of 404 and 400.
+
 ## 0.2.0 - 2026-10-18
 
 ### Changed
